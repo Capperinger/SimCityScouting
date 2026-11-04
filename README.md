@@ -18,6 +18,10 @@ Built for the First Robotics Competition REBUILT 2026
 - Offline storage, for the terrible connection found at competitions
 - Linked to usernames (less false data)
 - Google Auth for creating users
+- Previously signed-in users can reopen the app offline on the same device for up to seven days
+
+### Offline sign-in
+Sign in while online at least once on each device. The app remembers the signed-in name and ID on that device for seven days (it does not store the password). When offline, choose **Continue offline** on the login screen. Account creation and syncing submissions still require an internet connection. Signing out clears the remembered session. The deployed app must be opened online once after its service worker is deployed so its app files can be cached.
 
 ## Installation
  Clone the repository and install dependencies. Node must be first installed

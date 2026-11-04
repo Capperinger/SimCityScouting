@@ -41,7 +41,7 @@ let endgameClimbLevel = "0";
 // finale  values
 let crossedBump = false;
 let underTrench = false;
-let robotErrorCheck: Record<string, boolean> = {
+const robotErrorCheck: Record<string, boolean> = {
     "Intake issues": false,
     "Climb Failed": false,
     "Robot unresponsive": false,
@@ -52,8 +52,6 @@ let robotErrorCheck: Record<string, boolean> = {
     Other: false,
 };
 let notes = "";
-
-let randNum = 0;
 
 const robotErrorList: string[] = [
     "Intake issues",
@@ -97,7 +95,7 @@ export default function seedDataBase() {
         );
     }
 
-    let baseJsonList = JSON.parse(emptyList);
+    const baseJsonList = JSON.parse(emptyList);
 
     // EventName
     if (getRandomInt(0, 1) == 0) {
@@ -170,7 +168,7 @@ export default function seedDataBase() {
     }
 
     // shift2Fuel & shift2Defense
-    if (shift1HubActive) {
+    if (!shift2HubActive) {
         shift2Fuel = 0;
         if (getRandomInt(0, 1) == 0) {
             shift2Defense = false;
@@ -201,7 +199,7 @@ export default function seedDataBase() {
     }
 
     // shift3Fuel & shift3Defense
-    if (!shift1HubActive) {
+    if (!shift3HubActive) {
         shift3Fuel = 0;
         if (getRandomInt(0, 1) == 0) {
             shift3Defense = false;

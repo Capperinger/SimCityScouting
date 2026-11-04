@@ -4,7 +4,7 @@ import { writeToDb } from "../scripts/firebase";
 import ReactJsonView from "@microlink/react-json-view";
 import seedDataBase from "../scripts/seed";
 import IntegerInput from "../components/IntegerInput";
-import { debug } from "./Home";
+import { debug } from "../scripts/debug";
 
 interface ActionComponentProps {
     onSubmit: () => void;
@@ -67,7 +67,6 @@ const LocalStorageView: React.FC = () => {
 
     const [seedNumber, setSeedNumber] = useState(1);
 
-    const [show, setShow] = React.useState<boolean>(true);
     const [keys, setKeys] = React.useState<string[]>([]);
     const [selectedKey, setSelectedKey] = React.useState<string>("");
     const [value, setValue] = React.useState<string>("");
@@ -93,18 +92,16 @@ const LocalStorageView: React.FC = () => {
 
     const clear = () => {
         if (window.confirm("Are you sure you want to clear local storage?")) {
-            for (let i = 0; i < localStorage.length; i++) {
-                setSelectedKey;
-                localStorage.removeItem(keys[i]);
-                setValue("");
-                setKeys(Object.keys(localStorage));
-            }
+            localStorage.clear();
+            setSelectedKey("");
+            setValue("");
+            setKeys([]);
         }
     };
 
     const submitItem = async () => {
         if (!selectedKey) return;
-        let json = JSON.parse(value);
+        const json = JSON.parse(value);
         await writeToDb(
             `${json.teamNumber?.toString()}/${json.matchNumber?.toString()}`,
             json,
@@ -158,18 +155,16 @@ const LocalStorageView: React.FC = () => {
                     Load
                 </button>
 
-                {show ? (
-                    <ReactJsonView
-                        src={(() => {
-                            try {
-                                return JSON.parse(value) || {};
-                            } catch (e) {
-                                return {};
-                            }
-                        })()}
-                        theme={"monokai"}
-                    />
-                ) : null}
+                <ReactJsonView
+                    src={(() => {
+                        try {
+                            return JSON.parse(value) || {};
+                        } catch {
+                            return {};
+                        }
+                    })()}
+                    theme={"monokai"}
+                />
                 <p className="text-white">
                     Make sure the above has a value before submitting or
                     deleting

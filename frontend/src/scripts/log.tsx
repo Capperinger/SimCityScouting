@@ -16,7 +16,7 @@ export const log = async (message: string): Promise<void> => {
             axiom.ingest(DATASET, [{ message }]);
             await axiom.flush();
             sent = true;
-        } catch (e) {
+        } catch {
             await new Promise((res) => setTimeout(res, 5000));
         }
     }

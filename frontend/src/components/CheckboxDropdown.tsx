@@ -18,10 +18,13 @@ const CheckboxDropdown: React.FC<CheckboxDropdown> = ({
     const [newList, setNewList] =
         useState<Record<string, boolean>>(optionCheck);
 
-    const changeList = (option: any) => {
-        optionCheck[option] = !optionCheck[option];
-        setNewList(optionCheck);
-        onChange(newList);
+    const changeList = (option: string) => {
+        const updatedList = {
+            ...newList,
+            [option]: !newList[option],
+        };
+        setNewList(updatedList);
+        onChange(updatedList);
     };
 
     let boxLabel = null;
@@ -46,14 +49,14 @@ const CheckboxDropdown: React.FC<CheckboxDropdown> = ({
                 className="bg-gray-700 p-4 border-gray-200"
             >
                 {optionList.map((option) => (
-                    <div className="flex flex-fill">
+                    <div className="flex flex-fill" key={option}>
                         <label className="text-white ">
                             <input
                                 type="checkbox"
-                                onClick={() => {
+                                onChange={() => {
                                     changeList(option);
                                 }}
-                                defaultChecked={newList[option]}
+                                checked={newList[option]}
                             />{" "}
                             {option}
                         </label>

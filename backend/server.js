@@ -121,7 +121,6 @@ router.post("/write", write);
 router.post("/read", read);
 
 router.post("/login", async (req, res) => {
-    console.log(req.body);
     try {
         const { email, password } = req.body;
 
@@ -131,47 +130,25 @@ router.post("/login", async (req, res) => {
 
         const userRecord = await admin.auth().getUserByEmail(email);
 
-        const customToken = await admin
-            .auth()
-            .createCustomToken(userRecord.uid);
-
         const identifier = userRecord.displayName || userRecord.uid;
 
         const docRef = db.doc(`auth/${identifier}`);
         const snapshot = await docRef.get();
 
-        /*
-        res.status(200).json({
-            message: "Login successful",
-            customToken,
-            uid: userRecord.uid,
-            email: userRecord.email,
-            name: userRecord.displayName,
-            // hashedData // included if you need it
-        });
-        return;*/
-        let hashpassword = null;
-        let hashedData = null;
-        try {
-            if (snapshot.exists) {
-                hashedData = snapshot.data();
-            }
-            hashedData = hashedData.hashed.trim();
-            hashpassword = await sha256(password.trim());
-            console.log(hashpassword);
-            console.log(hashedData);
-        } catch (e) {
-            console.log(e);
-        }
+        const storedHash = snapshot.exists
+            ? snapshot.data()?.hashed
+            : undefined;
+        const passwordHash = await sha256(password);
 
-        if (hashpassword == hashedData) {
+        if (
+            typeof storedHash === "string" &&
+            passwordHash === storedHash
+        ) {
             res.status(200).json({
                 message: "Login successful",
-                customToken,
                 uid: userRecord.uid,
                 email: userRecord.email,
                 name: userRecord.displayName,
-                // hashedData // included if you need it
             });
         } else {
             res.status(401).json({ message: "Invalid email or password" });
@@ -188,18 +165,37 @@ router.post("/login", async (req, res) => {
 });
 
 router.post("/register", async (req, res) => {
-    console.log(req.body);
     try {
         const { email, password, name } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).send("Email and password are required");
+        if (
+            typeof email !== "string" ||
+            typeof password !== "string" ||
+            typeof name !== "string" ||
+            !email.trim() ||
+            !name.trim() ||
+            !password
+        ) {
+            return res
+                .status(400)
+                .json({ message: "Name, email, and password are required" });
         }
+
         const userRecord = await admin.auth().createUser({
-            email,
+            email: email.trim(),
             password,
-            displayName: name,
+            displayName: name.trim(),
         });
+
+        try {
+            await db.doc(`auth/${userRecord.displayName}`).set({
+                hashed: await sha256(password),
+            });
+        } catch (error) {
+            await admin.auth().deleteUser(userRecord.uid);
+            throw error;
+        }
+
         res.status(201).json({
             message: "User created successfully",
             uid: userRecord.uid,

@@ -1,16 +1,16 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 
 export const useTimer = (initialSeconds: number = 0) => {
     const [seconds, setSeconds] = useState(initialSeconds);
     const [isActive, setIsActive] = useState(false);
     const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    const start = () => setIsActive(true);
-    const pause = () => setIsActive(false);
-    const reset = () => {
+    const start = useCallback(() => setIsActive(true), []);
+    const pause = useCallback(() => setIsActive(false), []);
+    const reset = useCallback(() => {
         setIsActive(false);
         setSeconds(initialSeconds);
-    };
+    }, [initialSeconds]);
 
     useEffect(() => {
         if (isActive) {

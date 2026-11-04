@@ -8,4 +8,13 @@ export default defineConfig({
     react(),
     tailwindcss()
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://scout4364i.vercel.app',
+        changeOrigin: true,
+        secure: true,
+      },
+    },
+  },
 })

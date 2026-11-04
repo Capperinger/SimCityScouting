@@ -1,22 +1,32 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { readCookie, deleteCookie, generateCookie } from "../scripts/user";
-import { de } from "../scripts/firebase";
+import {
+    readCookie,
+    deleteCookie,
+    generateCookie,
+    clearRememberedLogin,
+} from "../scripts/user";
+import { debug } from "../scripts/debug";
 import BinaryChoice from "../components/BinaryChoice";
 
-let debug = await de();
-
-export { debug };
-const signedIn = readCookie("user");
-
 const Home: React.FC = () => {
-
-    const [nameCSS, setNameCSS] = useState<string>("text-white underline")
-
     const [advanced, setAdvanced] = useState<boolean>(
         readCookie("dih") == "true",
     );
     const navigate = useNavigate();
+    const userName = readCookie("user");
+    const signedIn = userName !== undefined;
+    const nameCSS =
+        userName === "William Ding" ||
+        userName === "Dev" ||
+        userName === "sam meng" ||
+        userName === "testUser"
+            ? "gradient-sam text-transparent animate-gradient"
+            : userName === "Estiaan K"
+              ? "gradient-gold text-transparent animate-gradient"
+              : userName === "Daniel Senchukov"
+                ? "gradient-red text-transparent animate-quick"
+                : "text-white underline";
 
     const goToMatchForm = () => {
         navigate("/match");
@@ -28,43 +38,29 @@ const Home: React.FC = () => {
         navigate("/pitscouting");
     };
     const signOut = () => {
+        clearRememberedLogin();
         deleteCookie("user");
         deleteCookie("uid");
         navigate("/login");
     };
     useEffect(() => {
-        if (readCookie("user") == undefined) {
+        if (userName == undefined) {
             navigate("/login");
-        } else if (readCookie("user") == "William Ding" || readCookie("user") == "Dev" || readCookie("user") == "sam meng" ){
-            //setNameCSS("bg-gradient-to-r from-red-500 via-green-500 via-green-500 via-blue-500 to-purple-500 bg-clip-text text-transparent animate-gradient-x inline-block font-bold underline")
-            //setNameCSS("font-extrabold bg-[linear-gradient(to_right,white,pink,cyan,brown,black,red,orange,yellow,green,blue,indigo,purple)] bg-clip-text text-transparent animate-gradient-x inline-block")
-            setNameCSS("gradient-sam text-transparent animate-gradient")
-        } else if (readCookie("user") == "Estiaan K") {
-            setNameCSS("gradient-gold text-transparent animate-gradient")
-        } else if (readCookie("user") == "Daniel Senchukov"){
-            setNameCSS("gradient-red text-transparent animate-quick")
         }
-        
-    }, []);
+    }, [navigate, userName]);
     
     return (
         <div className="flex flex-col items-center justify-center space-y-6 w-full">
             <h1 className="font-bold text-white text-4xl underline text-center flex flex-row">
-                {readCookie("user") === undefined
-                    ? "Welcome to Sim-scouting!"
-                    : "Welcome to Sim-scouting, " + '\u00A0'    
+                {userName === undefined
+                    ? "Welcome to Sim-Scouting!"
+                    : "Welcome to Sim-Scouting, " + '\u00A0'    
                 }            
                 <div className={nameCSS}>
-                    {" " + readCookie("user")}
+                    {" " + userName}
                 </div>
 
             </h1>
-
-            <p className="text-gray-200 text-center w-full max-w-xl">
-                At Sim-City, we realized effective scouting requires simple
-                technology, which is why we created Sim-Scouting to simplify the
-                scouting experience.
-            </p>
 
             <div>
                 {debug && (

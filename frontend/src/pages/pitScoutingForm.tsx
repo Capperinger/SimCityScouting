@@ -7,7 +7,7 @@ import { readCookie } from "../scripts/user";
 import { writeToDb } from "../scripts/firebase";
 import Dropdown from "../components/Dropdown";
 import BinaryChoice from "../components/BinaryChoice";
-import { debug } from "./Home";
+import { debug } from "../scripts/debug";
 
 const PitScoutingForm: React.FC = () => {
     const navigate = useNavigate();
@@ -20,14 +20,14 @@ const PitScoutingForm: React.FC = () => {
         if (readCookie("user") == undefined) {
             navigate("/login");
         }
-    }, []);
+    }, [navigate]);
 
     const [sent, setSent] = useState<boolean>(true);
 
     /*Setup values*/
-    const [scoutingTeam, setScoutingTeam] = useState(0);
+    const scoutingTeam = 0;
     const [eventName, setEventName] = useState<string>("");
-    const [matchNumber, setMatchNumber] = useState(0);
+    const matchNumber = 0;
     const [teamnum, setTeamnum] = useState(0);
 
     /*Values*/
@@ -41,8 +41,13 @@ const PitScoutingForm: React.FC = () => {
 
     const events = ["NE District Minuteman Event", "NE District URI Event"];
 
+    const [multiShooter, setMultiShooter] = useState(false);
+    const [sstatic, setStatic] = useState(false);
+    const [crossedBump, setCrossedBump] = useState(false);
+    const [underTrench, setUnderTrench] = useState(false);
+
     async function submitData() {
-        let check: boolean =
+        const check: boolean =
             eventName !== "" && teamnum !== null && matchNumber !== null;
 
         const data = {
@@ -51,6 +56,11 @@ const PitScoutingForm: React.FC = () => {
             scoutingTeam: scoutingTeam,
             eventName: eventName,
             matchNumber: matchNumber,
+
+            static: !sstatic,
+            multiShooter: multiShooter,
+            crossedBump: crossedBump,
+            underTrench: underTrench,
 
             chassisSizel: chassisSizel,
             chassisSizew: chassisSizew,
@@ -74,7 +84,7 @@ const PitScoutingForm: React.FC = () => {
             );
 
             setSent(false);
-            let val = await writeToDb(
+            const val = await writeToDb(
                 `${"pitScouting"}/${teamnum?.toString()}`,
                 data, true
             );
@@ -132,6 +142,30 @@ const PitScoutingForm: React.FC = () => {
             <h1 className="text-white text-2xl font-semibold">
                 chassis {chassisSizel}x{chassisSizew}
             </h1>
+            <BinaryChoice
+                label={"Shooters turn?"}
+                options={["yes", "no"]}
+                value={sstatic}
+                onChange={setStatic}
+            />
+            <BinaryChoice
+                label={"Multiple Shooters?"}
+                options={["yes", "no"]}
+                value={multiShooter}
+                onChange={setMultiShooter}
+            />
+            <BinaryChoice
+                label={"Over Bump?"}
+                options={["yes", "no"]}
+                value={crossedBump}
+                onChange={setCrossedBump}
+            />
+            <BinaryChoice
+                label={"Under Trench?"}
+                options={["yes", "no"]}
+                value={underTrench}
+                onChange={setUnderTrench}
+            />
             <AutoResizeTextarea
                 value={startingHeight}
                 onChange={(val) => setStartingHeight(val.toString())}

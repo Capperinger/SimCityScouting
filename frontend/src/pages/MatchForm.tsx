@@ -8,7 +8,7 @@ import AutoResizeTextarea from "../components/AutoResizeTextArea";
 import CheckboxDropdown from "../components/CheckboxDropdown";
 import { writeToDb, wsSend } from "../scripts/firebase";
 import { readCookie } from "../scripts/user";
-import { debug } from "./Home";
+import { debug } from "../scripts/debug";
 import { useTimer } from "../scripts/timer";
 import { log } from "../scripts/log";
 import DropdownSearch from "../components/DropdownSearch";
@@ -17,14 +17,16 @@ const MatchForm: React.FC = () => {
     log(`User ${readCookie("user")} on matchform`);
 
     const navigate = useNavigate();
-
-    let advanced = true;
+    const { seconds, start, reset } = useTimer(0);
 
     useEffect(() => {
         if (readCookie("user") == undefined) {
             navigate("/login");
         }
         wsSend(readCookie("user") ?? "");
+    }, [navigate]);
+
+    useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             e.preventDefault();
             e.returnValue = "";
@@ -36,7 +38,8 @@ const MatchForm: React.FC = () => {
         return () => {
             window.removeEventListener("beforeunload", handleBeforeUnload);
         };
-    }, []); // empty dependency array so only runs once
+    }, [seconds]);
+
     useEffect(() => {
         const intervalId = setInterval(() => {
             wsSend(readCookie("user") ?? "");
@@ -53,11 +56,9 @@ const MatchForm: React.FC = () => {
 
     type checkboxDropdownList = Record<string, boolean>;
 
-    const [showCheckboxes, setShowCheckboxes] = useState<boolean>(false);
     // this boolean is used to show a message if the data was not sent
     const [sent, setSent] = useState<boolean>(true);
     // Setup values
-    const [scoutingTeam, setScoutingTeam] = useState(0);
     const [eventName, setEventName] = useState<string>("");
     const [teamNumber, setTeamNumber] = useState<string>("");
     const [matchNumber, setMatchNumber] = useState(0);
@@ -71,31 +72,28 @@ const MatchForm: React.FC = () => {
     const [teleopShift, setTeleopShift] = useState(0);
 
     const [transitionFuel, setTransitionFuel] = useState(0);
-    const [shift1HubActive, setShift1HubActive] = useState(false);
-    const [shift2HubActive, setShift2HubActive] = useState(true);
-    const [shift3HubActive, setShift3HubActive] = useState(false);
-    const [shift4HubActive, setShift4HubActive] = useState(true);
+    const [shiftHubActive, setShiftHubActive] = useState(false);
 
     const [shift1Fuel, setShift1Fuel] = useState(0);
     const [shift2Fuel, setShift2Fuel] = useState(0);
     const [shift3Fuel, setShift3Fuel] = useState(0);
     const [shift4Fuel, setShift4Fuel] = useState(0);
 
-    const [transitionCollected, setTransitionCollected] = useState(false);
-    const [shift1Collected, setShift1Collected] = useState(false);
-    const [shift2Collected, setShift2Collected] = useState(false);
-    const [shift3Collected, setShift3Collected] = useState(false);
-    const [shift4Collected, setShift4Collected] = useState(false);
+    const [transitionCollected, setTransitionCollected] = useState(true);
+    const [shift1Collected, setShift1Collected] = useState(true);
+    const [shift2Collected, setShift2Collected] = useState(true);
+    const [shift3Collected, setShift3Collected] = useState(true);
+    const [shift4Collected, setShift4Collected] = useState(true);
 
-    const [shift1Defense, setShift1Defense] = useState(false);
-    const [shift2Defense, setShift2Defense] = useState(false);
-    const [shift3Defense, setShift3Defense] = useState(false);
-    const [shift4Defense, setShift4Defense] = useState(false);
+    const [shift1Defense, setShift1Defense] = useState(true);
+    const [shift2Defense, setShift2Defense] = useState(true);
+    const [shift3Defense, setShift3Defense] = useState(true);
+    const [shift4Defense, setShift4Defense] = useState(true);
 
-    const [shift1HoardedFuel, setShift1HoardedFuel] = useState(false);
-    const [shift2HoardedFuel, setShift2HoardedFuel] = useState(false);
-    const [shift3HoardedFuel, setShift3HoardedFuel] = useState(false);
-    const [shift4HoardedFuel, setShift4HoardedFuel] = useState(false);
+    const [shift1HoardedFuel, setShift1HoardedFuel] = useState(true);
+    const [shift2HoardedFuel, setShift2HoardedFuel] = useState(true);
+    const [shift3HoardedFuel, setShift3HoardedFuel] = useState(true);
+    const [shift4HoardedFuel, setShift4HoardedFuel] = useState(true);
 
     // Endgame values
     const [endgameFuel, setEndgameFuel] = useState(0);
@@ -136,31 +134,17 @@ const MatchForm: React.FC = () => {
             Other: false,
         });
 
-    const [multiShooter, setMultiShooter] = useState(false);
-    const [sstatic, setStatic] = useState(false);
-    const [crossedBump, setCrossedBump] = useState(false);
-    const [underTrench, setUnderTrench] = useState(false);
-
     const events = ["NE District Minuteman Event", "NE District URI Event"];
-
-    const switchShifts = () => {
-        setShift1HubActive(!shift1HubActive);
-        setShift2HubActive(!shift2HubActive);
-        setShift3HubActive(!shift3HubActive);
-        setShift4HubActive(!shift4HubActive);
-    };
-
-    let { seconds, isActive, start, pause, reset } = useTimer(0);
 
     const goBack = () => {
         if (seconds > 1) {
             if (readCookie("dih") == "true") {
-                let inp = prompt("enter your username to continue");
+                const inp = prompt("enter your username to continue");
                 if (inp == readCookie("user")) {
                     navigate("/");
                 }
             } else {
-                let inp = prompt("Are you sure? type ok");
+                const inp = prompt("Are you sure? type ok");
                 if (inp == "ok" || inp == "Ok") {
                     navigate("/");
                 }
@@ -169,51 +153,6 @@ const MatchForm: React.FC = () => {
             navigate("/");
         }
     };
-
-    function switchShiftsBetter(buttonPressed: boolean) {
-        if (buttonPressed) {
-            if (!shift1HubActive) {
-                switchShifts();
-            }
-        } else {
-            if (shift1HubActive) {
-                switchShifts();
-            }
-        }
-    }
-    function switchShiftsBetter2(buttonPressed: boolean) {
-        if (buttonPressed) {
-            if (!shift2HubActive) {
-                switchShifts();
-            }
-        } else {
-            if (shift2HubActive) {
-                switchShifts();
-            }
-        }
-    }
-    function switchShiftsBetter3(buttonPressed: boolean) {
-        if (buttonPressed) {
-            if (!shift3HubActive) {
-                switchShifts();
-            }
-        } else {
-            if (shift3HubActive) {
-                switchShifts();
-            }
-        }
-    }
-    function switchShiftsBetter4(buttonPressed: boolean) {
-        if (buttonPressed) {
-            if (!shift4HubActive) {
-                switchShifts();
-            }
-        } else {
-            if (shift4HubActive) {
-                switchShifts();
-            }
-        }
-    }
     // 1. Create a ref to track the last phase we handled
     const lastPhaseRef = useRef<string>("");
 
@@ -248,6 +187,8 @@ const MatchForm: React.FC = () => {
             console.log(`Switching to: ${currentPhase}`);
 
             if (currentPhase === "auto") {
+                // Timer phase transitions intentionally synchronize the active form section.
+                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setSection("auto");
             } else if (currentPhase.startsWith("teleop")) {
                 setSection("teleop");
@@ -260,11 +201,11 @@ const MatchForm: React.FC = () => {
         }
 
         if (seconds === 0) lastPhaseRef.current = "";
-    }, [seconds]);
+    }, [seconds, reset]);
 
     async function submitData() {
         //make sure certain fields are filled out
-        let check: boolean =
+        const check: boolean =
             eventName !== "" && teamNumber !== "" && matchNumber !== 0;
 
         const data = {
@@ -277,10 +218,10 @@ const MatchForm: React.FC = () => {
             autoClimbed: autoClimbed,
             autoHoardedFuel: autoHoardedFuel,
 
-            shift1HubActive: shift1HubActive,
-            shift2HubActive: shift2HubActive,
-            shift3HubActive: shift3HubActive,
-            shift4HubActive: shift4HubActive,
+            shift1HubActive: shiftHubActive,
+            shift2HubActive: !shiftHubActive,
+            shift3HubActive: shiftHubActive,
+            shift4HubActive: !shiftHubActive,
 
             transitionCollected: transitionCollected,
             shift1Collected: shift1Collected,
@@ -307,10 +248,6 @@ const MatchForm: React.FC = () => {
             endgameFuel: endgameFuel,
             endgameClimbLevel: endgameClimbLevel,
 
-            static: !sstatic,
-            multiShooter: multiShooter,
-            crossedBump: crossedBump,
-            underTrench: underTrench,
             notes: notes,
             robotError: robotErrorsCheck,
             failure: Object.values(robotErrorsCheck).some(
@@ -330,7 +267,7 @@ const MatchForm: React.FC = () => {
                 JSON.stringify(data),
             );
             setSent(false);
-            let val = await writeToDb(
+            const val = await writeToDb(
                 `${teamNumber?.toString()}/${matchNumber?.toString()}`,
                 data,
             );
@@ -482,8 +419,8 @@ const MatchForm: React.FC = () => {
                     <BinaryChoice
                         label={"Hub Active?"}
                         options={["yes", "no"]}
-                        onChange={switchShiftsBetter}
-                        value={shift1HubActive}
+                        onChange={setShiftHubActive}
+                        value={shiftHubActive}
                     />
                     <MultiCounterInput
                         min={0}
@@ -518,8 +455,10 @@ const MatchForm: React.FC = () => {
                     <BinaryChoice
                         label={"Hub Active?"}
                         options={["yes", "no"]}
-                        onChange={switchShiftsBetter2}
-                        value={shift2HubActive}
+                        onChange={(isActive) =>
+                            setShiftHubActive(!isActive)
+                        }
+                        value={!shiftHubActive}
                     />
                     <MultiCounterInput
                         min={0}
@@ -554,8 +493,8 @@ const MatchForm: React.FC = () => {
                     <BinaryChoice
                         label={"Hub Active?"}
                         options={["yes", "no"]}
-                        onChange={switchShiftsBetter3}
-                        value={shift3HubActive}
+                        onChange={setShiftHubActive}
+                        value={shiftHubActive}
                     />
                     <MultiCounterInput
                         min={0}
@@ -590,8 +529,10 @@ const MatchForm: React.FC = () => {
                     <BinaryChoice
                         label={"Hub Active?"}
                         options={["yes", "no"]}
-                        onChange={switchShiftsBetter4}
-                        value={shift4HubActive}
+                        onChange={(isActive) =>
+                            setShiftHubActive(!isActive)
+                        }
+                        value={!shiftHubActive}
                     />
                     <MultiCounterInput
                         min={0}
@@ -687,38 +628,7 @@ const MatchForm: React.FC = () => {
                         );
                     }}
                 />
-            </>
-        );
-    } else if (section === "errors") {
-        content = (
-            <>
-                <div className="flex flex-col items-center space-y-2">
-                    <BinaryChoice
-                        label={"Shooters turn?"}
-                        options={["yes", "no"]}
-                        value={sstatic}
-                        onChange={setStatic}
-                    />
-                    <BinaryChoice
-                        label={"Multiple Shooters?"}
-                        options={["yes", "no"]}
-                        value={multiShooter}
-                        onChange={setMultiShooter}
-                    />
-                    <BinaryChoice
-                        label={"Over Bump?"}
-                        options={["yes", "no"]}
-                        value={crossedBump}
-                        onChange={setCrossedBump}
-                    />
-                    <BinaryChoice
-                        label={"Under Trench?"}
-                        options={["yes", "no"]}
-                        value={underTrench}
-                        onChange={setUnderTrench}
-                    />
-
-                    <CheckboxDropdown
+                <CheckboxDropdown
                         label={"Select Robot Errors"}
                         optionList={robotErrors}
                         optionCheck={robotErrorsCheck}
@@ -754,7 +664,6 @@ const MatchForm: React.FC = () => {
                     ) : (
                         <></>
                     )}
-                </div>
             </>
         );
     }
@@ -764,9 +673,6 @@ const MatchForm: React.FC = () => {
             <button className={buttonStyle} onClick={goBack}>
                 Back
             </button>
-            <h1 className="font-bold text-white text-4xl pb-1">
-                Scouting Match
-            </h1>
             <div className="flex flex-col items-center justify-start pt-2.5 w-full">
                 {/* Main Button Container */}
                 <div className="flex flex-row flex-wrap justify-center gap-4 pb-5 max-w-[400px]">
@@ -796,12 +702,6 @@ const MatchForm: React.FC = () => {
                         onClick={() => setSection("endgame")}
                     >
                         Endgame
-                    </button>
-                    <button
-                        className={tab("errors")}
-                        onClick={() => setSection("errors")}
-                    >
-                        Finale
                     </button>
                 </div>
             </div>

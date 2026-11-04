@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import MatchForm from "./pages/MatchForm";
-import Footer from "./components/Footer";
 import LocalStorageView from "./pages/LocalStored";
 import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
@@ -28,8 +27,6 @@ function App() {
                         <Route path="/online" element={<Online />} />
                     </Routes>
                 </div>
-                {/* Footer always at bottom */}
-                <Footer />
             </div>
         </BrowserRouter>
     );

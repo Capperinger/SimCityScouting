@@ -16,48 +16,8 @@ const MultiCounterInput: React.FC<MultiCounterInputProps> = ({
     max = Infinity,
     label,
 }) => {
-    const increment = () => {
-        if (value < max) {
-            onChange(value + 1);
-        }
-    };
-
-    const decrement = () => {
-        if (value > min) {
-            onChange(value - 1);
-        }
-    };
-
-    const incfive = () => {
-        if (value < max - 5) {
-            onChange(value + 5);
-        } else {
-            onChange(max);
-        }
-    };
-
-    const decfive = () => {
-        if (value > min + 5) {
-            onChange(value - 5);
-        } else {
-            onChange(0);
-        }
-    };
-
-    const decten = () => {
-        if (value > min + 10) {
-            onChange(value - 10);
-        } else {
-            onChange(0);
-        }
-    };
-
-    const incten = () => {
-        if (value < max - 10) {
-            onChange(value + 10);
-        } else {
-            onChange(max);
-        }
+    const changeBy = (amount: number) => {
+        onChange(Math.min(max, Math.max(min, value + amount)));
     };
 
     let boxLabel = null;
@@ -78,22 +38,16 @@ const MultiCounterInput: React.FC<MultiCounterInputProps> = ({
                 {/* Decrement Group */}
                 <div className="flex gap-2 lg:gap-2">
                     <button
-                        onClick={decrement}
+                        onClick={() => changeBy(-1)}
                         className="bg-sky-600 text-white font-bold rounded-full h-12 w-12 hover:bg-sky-700 transition-all active:scale-95"
                     >
                         -1
                     </button>
                     <button
-                        onClick={decfive}
+                        onClick={() => changeBy(-5)}
                         className="bg-sky-600 text-white font-bold rounded-full h-12 w-12 hover:bg-sky-700 transition-all active:scale-95"
                     >
                         -5
-                    </button>
-                    <button
-                        onClick={decten}
-                        className="bg-sky-600 text-white font-bold rounded-full h-12 w-12 hover:bg-sky-700 transition-all active:scale-95"
-                    >
-                        -10
                     </button>
                 </div>
 
@@ -112,22 +66,16 @@ const MultiCounterInput: React.FC<MultiCounterInputProps> = ({
                 {/* Increment Group */}
                 <div className="flex gap-2 lg:gap-2">
                     <button
-                        onClick={increment}
+                        onClick={() => changeBy(1)}
                         className="bg-sky-600 text-white font-bold rounded-full h-30 w-30 hover:bg-sky-700 transition-all active:scale-95"
                     >
                         +1
                     </button>
                     <button
-                        onClick={incfive}
+                        onClick={() => changeBy(5)}
                         className="bg-sky-600 text-white font-bold rounded-full h-12 w-12 hover:bg-sky-700 transition-all active:scale-95"
                     >
                         +5
-                    </button>
-                    <button
-                        onClick={incten}
-                        className="bg-sky-600 text-white font-bold rounded-full h-12 w-12 hover:bg-sky-700 transition-all active:scale-95"
-                    >
-                        +10
                     </button>
                 </div>
             </div>

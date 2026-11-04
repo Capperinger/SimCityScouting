@@ -1,22 +1,22 @@
-import { generateCookie } from "./user";
-import { readCookie } from "./user";
+import {
+    generateCookie,
+    readCookie,
+    rememberLogin,
+} from "./user";
 import { log } from "./log";
 
-const LINK = window.location.href.includes("http://localhost:5173/")
-    ? "http://localhost:3000/api"
-    : "https://scout4364i.vercel.app/api";
+const LINK = import.meta.env.DEV
+    ? "/api"
+    : "https://3464scouting.vercel.app/api";
 
-async function sha256(message: string) {
-    const msgBuffer = new TextEncoder().encode(message);
+type ScoutingData = Record<string, unknown> & {
+    teamNumber?: number | string;
+    matchNumber?: number | string;
+};
 
-    const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray
-        .map((b) => ("00" + b.toString(16)).slice(-2))
-        .join("");
-    return hashHex;
-}
+type TeamListResponse = {   
+    team?: Array<number | string>;
+};
 
 export async function rt(path: string) {
     const response = await fetch(`${LINK}/readRt`, {
@@ -36,15 +36,15 @@ export async function de() {
     const response = await fetch(`${LINK}/debug`, {
         method: "GET",
     });
-    let rawWhiteList = await response.json();
+    const rawWhiteList = await response.json();
 
-    let whiteList = rawWhiteList.value.split(",").map((s: string) => s.trim());
+    const whiteList = rawWhiteList.value.split(",").map((s: string) => s.trim());
     return whiteList.includes(uid);
 }
 
-async function writeData(path: string, data: any) {
+async function writeData(path: string, data: unknown) {
     try {
-        let body = {
+        const body = {
             path: path,
             data: data,
         };
@@ -68,24 +68,32 @@ async function writeData(path: string, data: any) {
         return false;
     }
 }
-export async function writeToDb(path: string, data: any, pit: boolean = false) {
+export async function writeToDb(
+    path: string,
+    data: ScoutingData,
+    pit: boolean = false,
+) {
     log(
         `submit data to team ${data.teamNumber} at match num ${data.matchNumber} from ${readCookie("user")}`,
     );
     if (!pit) {
-        let p = await readDoc("/datas/data");
-        p = p.team;
-        if (p && !p.includes(data.teamNumber)) {
-            log(`Add team ${data.teamnumber}`);
-            p.push(data.teamNumber);
+        const teamData = await readDoc("/datas/data");
+        const teams = teamData.team;
+        const teamNumber = data.teamNumber;
+        if (
+            teams &&
+            teamNumber !== undefined &&
+            !teams.includes(teamNumber)
+        ) {
+            log(`Add team ${teamNumber}`);
             await writeData("datas/data", {
-                team: p,
+                team: [...teams, teamNumber],
             });
         }
     }
     return await writeData(path, data);
 }
-export async function readDoc(path: string): Promise<any> {
+export async function readDoc(path: string): Promise<TeamListResponse> {
     try {
         const response = await fetch(LINK + "/read", {
             method: "POST",
@@ -99,7 +107,7 @@ export async function readDoc(path: string): Promise<any> {
             throw new Error(`Server error: ${response.status}`);
         }
 
-        const data = await response.json();
+        const data: TeamListResponse = await response.json();
         return data; // This sends the data back to whoever called readDoc()
     } catch (error) {
         console.error("Error reading document:", error);
@@ -107,91 +115,96 @@ export async function readDoc(path: string): Promise<any> {
     }
 }
 
+async function readAuthResponse(response: Response) {
+    const payload: unknown = await response.json().catch(() => null);
+    return typeof payload === "object" && payload !== null
+        ? (payload as {
+              message?: unknown;
+              name?: unknown;
+              uid?: unknown;
+          })
+        : null;
+}
+
 export async function registerUser(
     email: string,
     password: string,
     name: string,
 ) {
+    let response: Response;
     try {
-        const response = await fetch(LINK + "/register", {
+        response = await fetch(`${LINK}/register`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                email: email,
-                password: password,
-                name: name,
-            }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password, name }),
         });
-
-        const data = await response.json();
-        if (!response.ok) {
-            log(`Register Error ${data.message}`);
-            switch (data.message) {
-                case "Email already in use":
-                    return alert("Email already in use");
-
-                case "Invalid email address":
-                    return alert("Invalid email address");
-                case "Password is too weak":
-                    return alert("Password is too weak");
-                default:
-                    alert("Registration failed. Please try again.");
-            }
-        }
-        let hashed = await sha256(password);
-        console.log(hashed);
-        await writeData(`auth/${name}`, { hashed: hashed });
-        generateCookie("user", data.name, 7);
-        generateCookie("uid", data.uid, 7);
-        log(`Success with ${name} and ${password}`);
-        window.location.href = "/";
-    } catch (error) {
-        log(`Fail sign up with ${error}`);
-        console.error("Error registering user:", error);
+    } catch {
+        throw new LoginConnectionError(
+            "Can't reach the sign-up service. Check your connection and try again.",
+        );
     }
+
+    const data = await readAuthResponse(response);
+    if (!response.ok) {
+        throw new Error(
+            typeof data?.message === "string"
+                ? data.message
+                : `Account creation failed (server error ${response.status}).`,
+        );
+    }
+    if (typeof data?.name !== "string" || typeof data.uid !== "string") {
+        throw new Error("The sign-up service returned an invalid response.");
+    }
+
+    rememberLogin(data.name, data.uid);
+    generateCookie("user", data.name, 7);
+    generateCookie("uid", data.uid, 7);
+    window.location.href = "/";
 }
 
 export async function loginUser(email: string, password: string) {
+    let response: Response;
     try {
-        const response = await fetch(LINK + "/login", {
+        response = await fetch(`${LINK}/login`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                email: email,
-                password: password,
-            }),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
         });
-
-        let res = response.status;
-        let data = await response.json();
-        if (res == 200) {
-            generateCookie("user", data.name, 7);
-            generateCookie("uid", data.uid, 7);
-            window.location.href = "/";
-        } else {
-            if (res == 401) {
-                log(`invalid email password ${email}`);
-                alert("Password or email invalid");
-            } else {
-                log(`error login with data ${data}`);
-                alert("not good");
-                window.location.href = "/login";
-            }
-        }
-    } catch (err) {
-        log(`login failure with ${email}`);
+    } catch {
+        throw new LoginConnectionError(
+            "Can't reach the sign-in service. Check your connection and try again.",
+        );
     }
+
+    const data = await readAuthResponse(response);
+    if (response.status === 401) {
+        throw new Error("Email or password is incorrect.");
+    }
+    if (!response.ok) {
+        throw new Error(
+            typeof data?.message === "string"
+                ? data.message
+                : `Sign-in failed (server error ${response.status}).`,
+        );
+    }
+    if (typeof data?.name !== "string" || typeof data.uid !== "string") {
+        throw new Error("The sign-in service returned an invalid response.");
+    }
+
+    rememberLogin(data.name, data.uid);
+    generateCookie("user", data.name, 7);
+    generateCookie("uid", data.uid, 7);
+    window.location.href = "/";
 }
+
+export class LoginConnectionError extends Error {}
+
 export async function wsSend(message: string) {
     fetch(`${LINK}/time`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
-        body: JSON.stringify({message: readCookie("user")})
+        body: JSON.stringify({ message })
     });    
 }
