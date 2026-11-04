@@ -6,11 +6,21 @@ import { WebSocketServer } from "ws";
 
 dotenv.config();
 
+const FIREBASE_PROJECT_ID = "sim-city-scouting-rebuilt-test";
+const FIREBASE_DATABASE_URL =
+    "https://sim-city-scouting-rebuilt-test-default-rtdb.firebaseio.com";
 const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+
+if (serviceAccount.project_id !== FIREBASE_PROJECT_ID) {
+    throw new Error(
+        `SERVICE_ACCOUNT_KEY must belong to Firebase project ${FIREBASE_PROJECT_ID}`,
+    );
+}
 
 admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: "https://frc-scouting-example-default-rtdb.firebaseio.com",
+    projectId: FIREBASE_PROJECT_ID,
+    databaseURL: FIREBASE_DATABASE_URL,
 });
 
 const db = admin.firestore();
@@ -27,7 +37,7 @@ app.use((req, res, next) => {
     if (process.env.VERCEL == "Yes") {
         res.setHeader(
             "Access-Control-Allow-Origin",
-            "https://3464scouting.vercel.app",
+            "https://sim-city-scouting.vercel.app",
         );
     } else {
         res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
@@ -228,7 +238,7 @@ router.post("/readRt", async (req, res) => {
     });
 });
 
-app.use("/api", router); // floyd
+app.use("/api", router);
 
 server.listen(PORT, () => {
     console.log(`currently running on ${PORT}`);

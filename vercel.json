@@ -9,7 +9,7 @@
                 },
                 {
                     "key": "Access-Control-Allow-Origin",
-                    "value": "https://3464scouting.vercel.app"
+                    "value": "https://sim-city-scouting.vercel.app"
                 },
                 {
                     "key": "Access-Control-Allow-Methods",
