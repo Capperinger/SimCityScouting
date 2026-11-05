@@ -31,16 +31,18 @@ const app = express();
 const server = createServer(app);
 const router = express.Router();
 const PORT = 3000;
+const allowedOrigins = new Set([
+    "https://sim-city-scouting.vercel.app",
+    "https://3464scouting.vercel.app",
+    "http://localhost:5173",
+]);
 
 app.use(express.json());
 app.use((req, res, next) => {
-    if (process.env.VERCEL == "Yes") {
-        res.setHeader(
-            "Access-Control-Allow-Origin",
-            "https://sim-city-scouting.vercel.app",
-        );
-    } else {
-        res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
+    const origin = req.headers.origin;
+    if (origin && allowedOrigins.has(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
     }
     res.setHeader(
         "Access-Control-Allow-Methods",
@@ -73,14 +75,26 @@ async function sha256(message) {
     return hashHex;
 }
 
+function getDocumentRef(path) {
+    if (typeof path !== "string") {
+        throw new Error("A Firestore document path is required");
+    }
+
+    const segments = path.split("/").filter(Boolean);
+    if (segments.length === 0 || segments.length % 2 !== 0) {
+        throw new Error("Firestore document paths must identify a document");
+    }
+
+    return db.doc(segments.join("/"));
+}
+
 const read = async (req, res) => {
     const { path } = req.body;
     try {
         if (!path) {
             return res.status(400).send("Missing required fields");
         }
-        const pathSegments = path.split("/");
-        const docRef = db.doc(pathSegments.join("/"));
+        const docRef = getDocumentRef(path);
         const snapshot = await docRef.get();
 
         if (!snapshot.exists) {
@@ -103,8 +117,7 @@ const write = async (req, res) => {
             return res.status(400).send("Missing required fields");
         }
 
-        const pathSegments = path.split("/");
-        const docRef = db.doc(pathSegments.join("/"));
+        const docRef = getDocumentRef(path);
         await docRef.set(data, { merge: true });
 
         res.send("Data written successfully");
@@ -140,14 +153,24 @@ router.post("/login", async (req, res) => {
 
         const userRecord = await admin.auth().getUserByEmail(email);
 
-        const identifier = userRecord.displayName || userRecord.uid;
-
-        const docRef = db.doc(`auth/${identifier}`);
-        const snapshot = await docRef.get();
-
-        const storedHash = snapshot.exists
-            ? snapshot.data()?.hashed
+        const userPasswordRef = db.doc(`auth/${userRecord.uid}`);
+        const userPasswordSnapshot = await userPasswordRef.get();
+        let storedHash = userPasswordSnapshot.exists
+            ? userPasswordSnapshot.data()?.hashed
             : undefined;
+
+        if (
+            typeof storedHash !== "string" &&
+            userRecord.displayName &&
+            !userRecord.displayName.includes("/")
+        ) {
+            const legacyPasswordSnapshot = await db
+                .doc(`auth/${userRecord.displayName}`)
+                .get();
+            storedHash = legacyPasswordSnapshot.exists
+                ? legacyPasswordSnapshot.data()?.hashed
+                : undefined;
+        }
         const passwordHash = await sha256(password);
 
         if (
@@ -198,7 +221,7 @@ router.post("/register", async (req, res) => {
         });
 
         try {
-            await db.doc(`auth/${userRecord.displayName}`).set({
+            await db.doc(`auth/${userRecord.uid}`).set({
                 hashed: await sha256(password),
             });
         } catch (error) {

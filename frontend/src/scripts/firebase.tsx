@@ -5,9 +5,7 @@ import {
 } from "./user";
 import { log } from "./log";
 
-const LINK = import.meta.env.DEV
-    ? "/api"
-    : "https://sim-city-scouting.vercel.app/api";
+const LINK = "/api";
 
 type ScoutingData = Record<string, unknown> & {
     teamNumber?: number | string;
