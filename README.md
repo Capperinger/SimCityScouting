@@ -58,7 +58,9 @@ Every request on the server side has 2 properties: req (request), and res (respo
 - CLIENT SIDE (frontend/src/scripts/firebase.tsx)
 --
   - Most of the functions simply make a post request to server.js, except
-  - register(): uses sha256 to encrypt passwords. If you don't know what this does, ask Ms. Meyer, and say sam sent you
+  - register(): creates a Firebase Authentication user and stores a SHA-256 password hash in Firestore.
+
+The frontend uses the relative `/api` path in both environments. Vite proxies it to the backend during development, and `frontend/vercel.json` forwards it to the backend deployment in production. Keep those two destinations aligned when changing the backend deployment.
 ## Components (frontend/src/components)
 
 ### AutoResizeTextArea 
