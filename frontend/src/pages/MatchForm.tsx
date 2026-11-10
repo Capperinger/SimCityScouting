@@ -7,7 +7,7 @@ import Dropdown from "../components/Dropdown";
 import AutoResizeTextarea from "../components/AutoResizeTextArea";
 import CheckboxDropdown from "../components/CheckboxDropdown";
 import { writeToDb, wsSend } from "../scripts/firebase";
-import { readCookie } from "../scripts/user";
+import { isDataProtectionEnabled, readCookie } from "../scripts/user";
 import { debug } from "../scripts/debug";
 import { useTimer } from "../scripts/timer";
 import { log } from "../scripts/log";
@@ -32,7 +32,7 @@ const MatchForm: React.FC = () => {
             e.returnValue = "";
         };
 
-        if (seconds > 1 || readCookie("dih")) {
+        if (seconds > 1 || isDataProtectionEnabled()) {
             window.addEventListener("beforeunload", handleBeforeUnload);
         }
         return () => {
@@ -138,7 +138,7 @@ const MatchForm: React.FC = () => {
 
     const goBack = () => {
         if (seconds > 1) {
-            if (readCookie("dih") == "true") {
+            if (isDataProtectionEnabled()) {
                 const inp = prompt("enter your username to continue");
                 if (inp == readCookie("user")) {
                     navigate("/");

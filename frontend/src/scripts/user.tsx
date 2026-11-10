@@ -36,6 +36,22 @@ export function deleteCookie(name: string) {
     document.cookie = `${cookieString}; path=/`;
 }
 
+export function isDataProtectionEnabled() {
+    const preference = readCookie("fih");
+    if (preference !== undefined) {
+        return preference === "true";
+    }
+
+    const legacyPreference = readCookie("dih");
+    if (legacyPreference === undefined) {
+        return false;
+    }
+
+    generateCookie("fih", legacyPreference, 7);
+    deleteCookie("dih");
+    return legacyPreference === "true";
+}
+
 export function rememberLogin(name: string, uid: string) {
     const rememberedLogin: RememberedLogin = {
         name,
