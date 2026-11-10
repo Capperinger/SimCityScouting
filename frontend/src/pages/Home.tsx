@@ -17,7 +17,6 @@ const Home: React.FC = () => {
     const userName = readCookie("user");
     const signedIn = userName !== undefined;
     const nameCSS =
-        userName === "William Ding" ||
         userName === "Dev" ||
         userName === "sam meng" ||
         userName === "testUser"
@@ -28,7 +27,7 @@ const Home: React.FC = () => {
                 ? "gradient-red text-transparent animate-quick"
                 : "text-white underline";
 
-    const goToMatchForm = () => {
+    const goToMatchForm = () => {ca
         navigate("/match");
     };
     const goToLocalStorage = () => {

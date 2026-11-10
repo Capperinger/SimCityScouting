@@ -10,8 +10,20 @@ interface DiffsJson {
 }
 
 const Online: React.FC = () => {
-    const [data, setData] = useState<NestedEpochData | null>(null);
     const [diffs, setDiffs] = useState<DiffsJson>({});
+    const [error, setError] = useState("");
+
+    const isNestedEpochData = (value: unknown): value is NestedEpochData =>
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value) &&
+        Object.values(value).every(
+            (entry) =>
+                typeof entry === "object" &&
+                entry !== null &&
+                "time" in entry &&
+                typeof entry.time === "number",
+        );
 
     const proces = (inputData: NestedEpochData): DiffsJson => {
         const currentEpoch = Math.floor(Date.now() / 1000);
@@ -40,11 +52,21 @@ const Online: React.FC = () => {
             <button
                 className={buttonStyle}
                 onClick={async () => {
-                    const result = await rt("online");
-                    setData(result);
-                    if (data) {
-                        const calculated = proces(data);
-                        setDiffs(calculated);
+                    setError("");
+                    try {
+                        const result = await rt("online");
+                        if (!isNestedEpochData(result)) {
+                            throw new Error(
+                                "Realtime Database returned invalid online data.",
+                            );
+                        }
+                        setDiffs(proces(result));
+                    } catch (fetchError) {
+                        setError(
+                            fetchError instanceof Error
+                                ? fetchError.message
+                                : "Unable to load online data.",
+                        );
                     }
                 }}
             >
@@ -53,6 +75,11 @@ const Online: React.FC = () => {
 
             <div className="mt-5">
                 <h2 className="font-bold text-white text-l pb-1">Results:</h2>
+                {error && (
+                    <p className="text-red-400" role="alert">
+                        {error}
+                    </p>
+                )}
                 <pre className="bg-gray-100 p-4 rounded">
                     {JSON.stringify(diffs, null, 2)}
                 </pre>

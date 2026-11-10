@@ -89,9 +89,9 @@ function getDocumentRef(path) {
 }
 
 const read = async (req, res) => {
-    const { path } = req.body;
+    const { path } = req.body ?? {};
     try {
-        if (!path) {
+        if (typeof path !== "string" || !path) {
             return res.status(400).send("Missing required fields");
         }
         const docRef = getDocumentRef(path);
@@ -111,14 +111,45 @@ const read = async (req, res) => {
 const write = async (req, res) => {
     console.log(req.body);
     try {
-        const { path, data } = req.body;
+        const { path, data } = req.body ?? {};
 
-        if (!path || !data) {
+        if (
+            typeof path !== "string" ||
+            typeof data !== "object" ||
+            data === null ||
+            Array.isArray(data)
+        ) {
             return res.status(400).send("Missing required fields");
         }
 
+        const pathSegments = path.split("/").filter(Boolean);
         const docRef = getDocumentRef(path);
-        await docRef.set(data, { merge: true });
+        const batch = db.batch();
+        batch.set(docRef, data, { merge: true });
+
+        const isMatchDocument =
+            pathSegments.length === 2 &&
+            /^\d+$/.test(pathSegments[0]) &&
+            /^\d+$/.test(pathSegments[1]) &&
+            (typeof data.teamNumber === "number" ||
+                typeof data.teamNumber === "string");
+
+        if (
+            isMatchDocument &&
+            String(data.teamNumber) === pathSegments[0]
+        ) {
+            batch.set(
+                db.doc("datas/data"),
+                {
+                    team: admin.firestore.FieldValue.arrayUnion(
+                        data.teamNumber,
+                    ),
+                },
+                { merge: true },
+            );
+        }
+
+        await batch.commit();
 
         res.send("Data written successfully");
     } catch (error) {
@@ -134,10 +165,20 @@ router.get("/debug", async (req, res) => {
 });
 
 router.post("/time", async (req, res) => {
-    const r = rt.ref("online/" + req.body.message);
-    r.set({
-        time: Math.floor(new Date().getTime() / 1000),
-    });
+    const { message } = req.body ?? {};
+    if (typeof message !== "string" || !message) {
+        return res.status(400).json({ message: "A user name is required" });
+    }
+
+    try {
+        await rt.ref(`online/${message}`).set({
+            time: Math.floor(Date.now() / 1000),
+        });
+        res.sendStatus(204);
+    } catch (error) {
+        console.error("Realtime Database write failed:", error);
+        res.status(500).json({ message: "Unable to update online status" });
+    }
 });
 router.post("/write", write);
 
@@ -250,15 +291,18 @@ router.post("/register", async (req, res) => {
     }
 });
 router.post("/readRt", async (req, res) => {
-    const ref = rt.ref(req.body.path);
-    ref.once("value", (snapshot) => {
+    const { path } = req.body ?? {};
+    if (typeof path !== "string" || !path) {
+        return res.status(400).json({ message: "A database path is required" });
+    }
+
+    try {
+        const snapshot = await rt.ref(path).once("value");
         res.json({ value: snapshot.val() });
-        console.log(snapshot.val());
-        return;
-    }).catch((error) => {
-        console.error("Error fetching data:", error);
-        res.json({ value: "error" });
-    });
+    } catch (error) {
+        console.error("Realtime Database read failed:", error);
+        res.status(500).json({ message: "Unable to read database data" });
+    }
 });
 
 app.use("/api", router);

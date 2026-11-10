@@ -86,7 +86,7 @@ const PitScoutingForm: React.FC = () => {
             setSent(false);
             const val = await writeToDb(
                 `${"pitScouting"}/${teamnum?.toString()}`,
-                data, true
+                data
             );
 
             if (!val) {

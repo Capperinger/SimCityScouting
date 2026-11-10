@@ -70,6 +70,8 @@ const LocalStorageView: React.FC = () => {
     const [keys, setKeys] = React.useState<string[]>([]);
     const [selectedKey, setSelectedKey] = React.useState<string>("");
     const [value, setValue] = React.useState<string>("");
+    const [seeding, setSeeding] = React.useState(false);
+    const [seedMessage, setSeedMessage] = React.useState("");
 
     React.useEffect(() => {
         if (typeof window !== "undefined") {
@@ -109,12 +111,30 @@ const LocalStorageView: React.FC = () => {
         window.location.href = "/";
     };
 
-    const seed = () => {
-        const seedJson = seedDataBase();
-        writeToDb(
-            `${seedNumber.toString()}/${seedJson.matchNumber?.toString()}`,
-            seedJson,
-        );
+    const seed = async () => {
+        setSeeding(true);
+        setSeedMessage("");
+        try {
+            const seedJson = seedDataBase(seedNumber);
+            const saved = await writeToDb(
+                `${seedJson.teamNumber}/${seedJson.matchNumber}`,
+                seedJson,
+            );
+            setSeedMessage(
+                saved
+                    ? `Seed data saved for team ${seedJson.teamNumber}, match ${seedJson.matchNumber}.`
+                    : "Firebase did not save the seed data. Check your connection and try again.",
+            );
+        } catch (error) {
+            console.error("Unable to seed Firebase:", error);
+            setSeedMessage(
+                error instanceof Error
+                    ? `Unable to seed Firebase: ${error.message}`
+                    : "Unable to seed Firebase. Check your connection and try again.",
+            );
+        } finally {
+            setSeeding(false);
+        }
     };
 
     const buttonStyle: string =
@@ -190,10 +210,16 @@ const LocalStorageView: React.FC = () => {
 
                     <button
                         onClick={seed}
+                        disabled={seeding}
                         className="bg-violet-600 hover:bg-violet-800 text-white px-4 py-2 rounded-xl"
                     >
-                        Seed, DO NOT SPAM!!
+                        {seeding ? "Saving seed..." : "Seed, DO NOT SPAM!!"}
                     </button>
+                    {seedMessage && (
+                        <p className="text-white" role="status">
+                            {seedMessage}
+                        </p>
+                    )}
                 </div>
             ) : null}
         </div>
