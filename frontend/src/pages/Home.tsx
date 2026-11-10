@@ -5,19 +5,19 @@ import {
     deleteCookie,
     generateCookie,
     clearRememberedLogin,
+    isDataProtectionEnabled,
 } from "../scripts/user";
 import { debug } from "../scripts/debug";
 import BinaryChoice from "../components/BinaryChoice";
 
 const Home: React.FC = () => {
     const [advanced, setAdvanced] = useState<boolean>(
-        readCookie("dih") == "true",
+        isDataProtectionEnabled(),
     );
     const navigate = useNavigate();
     const userName = readCookie("user");
     const signedIn = userName !== undefined;
     const nameCSS =
-        userName === "William Ding" ||
         userName === "Dev" ||
         userName === "sam meng" ||
         userName === "testUser"
@@ -28,9 +28,7 @@ const Home: React.FC = () => {
                 ? "gradient-red text-transparent animate-quick"
                 : "text-white underline";
 
-    const goToMatchForm = () => {
-        navigate("/match");
-    };
+    const goToMatchForm = () => navigate("/match");
     const goToLocalStorage = () => {
         navigate("/stored");
     };
@@ -113,7 +111,7 @@ const Home: React.FC = () => {
                     value={advanced}
                     onChange={(e) => {
                         setAdvanced(e);
-                        generateCookie("dih", `${e}`, 7);
+                        generateCookie("fih", `${e}`, 7);
                     }}
                 />
             </div>

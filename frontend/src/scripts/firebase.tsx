@@ -16,7 +16,7 @@ type TeamListResponse = {
     team?: Array<number | string>;
 };
 
-export async function rt(path: string) {
+export async function rt(path: string): Promise<unknown> {
     const response = await fetch(`${LINK}/readRt`, {
         method: "POST",
         headers: {
@@ -24,8 +24,10 @@ export async function rt(path: string) {
         },
         body: JSON.stringify({path,}),
     });
-    const data = await response.json()
-    console.log(data.value)
+    if (!response.ok) {
+        throw new Error(`Realtime Database read failed (${response.status}).`);
+    }
+    const data = await response.json();
     return data.value;
 }
 
@@ -34,6 +36,9 @@ export async function de() {
     const response = await fetch(`${LINK}/debug`, {
         method: "GET",
     });
+    if (!response.ok) {
+        throw new Error(`Unable to load permissions (${response.status}).`);
+    }
     const rawWhiteList = await response.json();
 
     const whiteList = rawWhiteList.value.split(",").map((s: string) => s.trim());
@@ -54,7 +59,13 @@ async function writeData(path: string, data: unknown) {
             body: JSON.stringify(body),
         });
         if (!response.ok) {
-            console.log(`Server error: ${response.status}`);
+            const details = await response.text();
+            console.error(
+                `Firebase write failed (${response.status}): ${details}`,
+            );
+            alert(
+                `Firebase could not save your data (${response.status}). Please try again.`,
+            );
             return false;
         }
         return true;
@@ -69,26 +80,10 @@ async function writeData(path: string, data: unknown) {
 export async function writeToDb(
     path: string,
     data: ScoutingData,
-    pit: boolean = false,
 ) {
     log(
         `submit data to team ${data.teamNumber} at match num ${data.matchNumber} from ${readCookie("user")}`,
     );
-    if (!pit) {
-        const teamData = await readDoc("/datas/data");
-        const teams = teamData.team;
-        const teamNumber = data.teamNumber;
-        if (
-            teams &&
-            teamNumber !== undefined &&
-            !teams.includes(teamNumber)
-        ) {
-            log(`Add team ${teamNumber}`);
-            await writeData("datas/data", {
-                team: [...teams, teamNumber],
-            });
-        }
-    }
     return await writeData(path, data);
 }
 export async function readDoc(path: string): Promise<TeamListResponse> {
@@ -198,11 +193,20 @@ export async function loginUser(email: string, password: string) {
 export class LoginConnectionError extends Error {}
 
 export async function wsSend(message: string) {
-    fetch(`${LINK}/time`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message })
-    });    
+    try {
+        const response = await fetch(`${LINK}/time`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ message }),
+        });
+        if (!response.ok) {
+            throw new Error(
+                `Realtime Database write failed (${response.status}).`,
+            );
+        }
+    } catch (error) {
+        console.error("Unable to update online status:", error);
+    }
 }
