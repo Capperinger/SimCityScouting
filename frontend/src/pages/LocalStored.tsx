@@ -12,6 +12,37 @@ interface ActionComponentProps {
     clear: () => void;
 }
 
+interface StoredScoutingData extends Record<string, unknown> {
+    teamNumber: number | string;
+    matchNumber: number | string;
+}
+
+function isStoredScoutingData(value: unknown): value is StoredScoutingData {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    const data = value as Record<string, unknown>;
+    const hasValidNumber = (number: unknown) =>
+        (typeof number === "number" && Number.isFinite(number)) ||
+        (typeof number === "string" && number.trim() !== "");
+
+    return hasValidNumber(data.teamNumber) && hasValidNumber(data.matchNumber);
+}
+
+function parseJsonOrEmpty(value: string): object {
+    if (!value.trim()) {
+        return {};
+    }
+
+    try {
+        const parsed: unknown = JSON.parse(value);
+        return typeof parsed === "object" && parsed !== null ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
 const ActionComponent: React.FC<ActionComponentProps> = ({
     onSubmit,
     onDelete,
@@ -70,6 +101,7 @@ const LocalStorageView: React.FC = () => {
     const [keys, setKeys] = React.useState<string[]>([]);
     const [selectedKey, setSelectedKey] = React.useState<string>("");
     const [value, setValue] = React.useState<string>("");
+    const [submissionError, setSubmissionError] = React.useState("");
     const [seeding, setSeeding] = React.useState(false);
     const [seedMessage, setSeedMessage] = React.useState("");
 
@@ -102,12 +134,40 @@ const LocalStorageView: React.FC = () => {
     };
 
     const submitItem = async () => {
-        if (!selectedKey) return;
-        const json = JSON.parse(value);
-        await writeToDb(
-            `${json.teamNumber?.toString()}/${json.matchNumber?.toString()}`,
-            json,
+        setSubmissionError("");
+        if (!selectedKey) {
+            setSubmissionError("Select a local data item before submitting.");
+            return;
+        }
+
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(value);
+        } catch {
+            setSubmissionError(
+                "The selected item is empty or invalid JSON. Load or correct its data before submitting.",
+            );
+            return;
+        }
+
+        if (!isStoredScoutingData(parsed)) {
+            setSubmissionError(
+                "The selected item must be a scouting record with a team number and match number.",
+            );
+            return;
+        }
+
+        const saved = await writeToDb(
+            `${parsed.teamNumber}/${parsed.matchNumber}`,
+            parsed,
         );
+        if (!saved) {
+            setSubmissionError(
+                "Firebase did not save this item. Check your connection and try again.",
+            );
+            return;
+        }
+
         window.location.href = "/";
     };
 
@@ -176,14 +236,8 @@ const LocalStorageView: React.FC = () => {
                 </button>
 
                 <ReactJsonView
-                    src={(() => {
-                        try {
-                            return JSON.parse(value) || {};
-                        } catch {
-                            return {};
-                        }
-                    })()}
-                    theme={"monokai"}
+                    src={parseJsonOrEmpty(value)}
+                    theme="monokai"
                 />
                 <p className="text-white">
                     Make sure the above has a value before submitting or
@@ -196,6 +250,11 @@ const LocalStorageView: React.FC = () => {
                 onDelete={deleteItem}
                 clear={clear}
             />
+            {submissionError && (
+                <p className="text-red-400 text-center" role="alert">
+                    {submissionError}
+                </p>
+            )}
 
             {debug ? (
                 <div>
