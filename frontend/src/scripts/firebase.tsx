@@ -16,6 +16,15 @@ type TeamListResponse = {
     team?: Array<number | string>;
 };
 
+export const matchScoutingPath = (
+    teamNumber: number | string,
+    matchNumber: number | string,
+) =>
+    `match scouting/${teamNumber}/matches/${matchNumber}`;
+
+export const pitScoutingPath = (teamNumber: number | string) =>
+    `pit scouting/${teamNumber}`;
+
 export async function rt(path: string): Promise<unknown> {
     const response = await fetch(`${LINK}/readRt`, {
         method: "POST",
@@ -58,21 +67,42 @@ async function writeData(path: string, data: unknown) {
             },
             body: JSON.stringify(body),
         });
+        const responseBody = await response.text();
         if (!response.ok) {
-            const details = await response.text();
             console.error(
-                `Firebase write failed (${response.status}): ${details}`,
+                `Firebase write failed (${response.status}): ${responseBody}`,
             );
             alert(
-                `Firebase could not save your data (${response.status}). Please try again.`,
+                `Firebase could not save your data (${response.status})${responseBody ? `: ${responseBody}` : ""}`,
             );
             return false;
+        }
+
+        let result: unknown;
+        try {
+            result = JSON.parse(responseBody);
+        } catch {
+            throw new Error(
+                "The server returned an invalid response instead of confirming the Firebase write.",
+            );
+        }
+        if (
+            typeof result !== "object" ||
+            result === null ||
+            !("success" in result) ||
+            result.success !== true ||
+            !("path" in result) ||
+            result.path !== path
+        ) {
+            throw new Error(
+                "The server did not confirm that Firebase saved this data.",
+            );
         }
         return true;
     } catch (err) {
         console.error("Error writing document:", err);
         alert(
-            "An error occured: your data has been saved locally but not uploaded.",
+            `Firebase did not confirm saving your data${err instanceof Error ? `: ${err.message}` : ". Please check your connection and try again."}`,
         );
         return false;
     }
@@ -101,7 +131,7 @@ export async function readDoc(path: string): Promise<TeamListResponse> {
         }
 
         const data: TeamListResponse = await response.json();
-        return data; // This sends the data back to whoever called readDoc()
+        return data;
     } catch (error) {
         console.error("Error reading document:", error);
         throw error;
@@ -193,6 +223,10 @@ export async function loginUser(email: string, password: string) {
 export class LoginConnectionError extends Error {}
 
 export async function wsSend(message: string) {
+    if (!message.trim()) {
+        return;
+    }
+
     try {
         const response = await fetch(`${LINK}/time`, {
             method: "POST",

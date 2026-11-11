@@ -109,7 +109,6 @@ const read = async (req, res) => {
 };
 
 const write = async (req, res) => {
-    console.log(req.body);
     try {
         const { path, data } = req.body ?? {};
 
@@ -128,16 +127,43 @@ const write = async (req, res) => {
         batch.set(docRef, data, { merge: true });
 
         const isMatchDocument =
-            pathSegments.length === 2 &&
-            /^\d+$/.test(pathSegments[0]) &&
+            pathSegments.length === 4 &&
+            pathSegments[0] === "match scouting" &&
             /^\d+$/.test(pathSegments[1]) &&
-            (typeof data.teamNumber === "number" ||
-                typeof data.teamNumber === "string");
+            pathSegments[2] === "matches" &&
+            /^\d+$/.test(pathSegments[3]);
+        const isPitDocument =
+            pathSegments.length === 2 &&
+            pathSegments[0] === "pit scouting" &&
+            /^\d+$/.test(pathSegments[1]);
 
+        if (pathSegments[0] === "match scouting" && !isMatchDocument) {
+            return res.status(400).json({
+                message:
+                    "Match scouting paths must be match scouting/{team}/matches/{match}",
+            });
+        }
+        if (pathSegments[0] === "pit scouting" && !isPitDocument) {
+            return res.status(400).json({
+                message: "Pit scouting paths must be pit scouting/{team}",
+            });
+        }
         if (
             isMatchDocument &&
-            String(data.teamNumber) === pathSegments[0]
+            (String(data.teamNumber) !== pathSegments[1] ||
+                String(data.matchNumber) !== pathSegments[3])
         ) {
+            return res.status(400).json({
+                message: "Match data team and match numbers must match its path",
+            });
+        }
+        if (isPitDocument && String(data.teamNumber) !== pathSegments[1]) {
+            return res.status(400).json({
+                message: "Pit scouting team number must match its path",
+            });
+        }
+
+        if (isMatchDocument) {
             batch.set(
                 db.doc("datas/data"),
                 {
@@ -151,7 +177,7 @@ const write = async (req, res) => {
 
         await batch.commit();
 
-        res.send("Data written successfully");
+        res.status(201).json({ success: true, path });
     } catch (error) {
         console.error(`Error writing data: ${error.message}`);
         res.status(500).send(`Error: ${error.message}`);
@@ -166,7 +192,7 @@ router.get("/debug", async (req, res) => {
 
 router.post("/time", async (req, res) => {
     const { message } = req.body ?? {};
-    if (typeof message !== "string" || !message) {
+    if (typeof message !== "string" || !message.trim()) {
         return res.status(400).json({ message: "A user name is required" });
     }
 
@@ -262,9 +288,17 @@ router.post("/register", async (req, res) => {
         });
 
         try {
-            await db.doc(`auth/${userRecord.uid}`).set({
+            const batch = db.batch();
+            batch.set(db.doc(`auth/${userRecord.uid}`), {
                 hashed: await sha256(password),
             });
+            batch.set(db.doc(`users/${userRecord.uid}`), {
+                uid: userRecord.uid,
+                email: userRecord.email,
+                name: userRecord.displayName,
+                createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            await batch.commit();
         } catch (error) {
             await admin.auth().deleteUser(userRecord.uid);
             throw error;
