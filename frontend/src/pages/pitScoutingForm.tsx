@@ -4,10 +4,9 @@ import IntegerInput from "../components/IntegerInput";
 import AutoResizeTextarea from "../components/AutoResizeTextArea";
 import { readCookie } from "../scripts/user";
 
-import { writeToDb } from "../scripts/firebase";
+import { pitScoutingPath, writeToDb } from "../scripts/firebase";
 import Dropdown from "../components/Dropdown";
 import BinaryChoice from "../components/BinaryChoice";
-import { debug } from "../scripts/debug";
 
 const PitScoutingForm: React.FC = () => {
     const navigate = useNavigate();
@@ -23,6 +22,7 @@ const PitScoutingForm: React.FC = () => {
     }, [navigate]);
 
     const [sent, setSent] = useState<boolean>(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     /*Setup values*/
     const scoutingTeam = 0;
@@ -47,11 +47,15 @@ const PitScoutingForm: React.FC = () => {
     const [underTrench, setUnderTrench] = useState(false);
 
     async function submitData() {
-        const check: boolean =
-            eventName !== "" && teamnum !== null && matchNumber !== null;
+        const scoutName = readCookie("user");
+        const check =
+            eventName !== "" &&
+            Number.isSafeInteger(teamnum) &&
+            teamnum > 0 &&
+            scoutName !== undefined;
 
         const data = {
-            name: readCookie("user"),
+            name: scoutName,
             teamNumber: teamnum,
             scoutingTeam: scoutingTeam,
             eventName: eventName,
@@ -75,33 +79,35 @@ const PitScoutingForm: React.FC = () => {
     The path for block of data will be submitted as follows:
     /{eventName}/{teamnum}/{matchNumber}/{timestamp}, timestamp is not finished
     */
-        if (!check && !debug) {
-            alert("Please fill out all required fields before submitting.");
-        } else {
-            localStorage.setItem(
-                `pitData-${teamnum}`,
-                JSON.stringify(data),
+        if (!check) {
+            alert(
+                "Please sign in and enter a valid event and team number before submitting.",
             );
+            return;
+        }
 
-            setSent(false);
-            const val = await writeToDb(
-                `${"pitScouting"}/${teamnum?.toString()}`,
-                data
-            );
+        try {
+            localStorage.setItem(`pitData-${teamnum}`, JSON.stringify(data));
+        } catch (error) {
+            console.error("Unable to save the local pit scouting backup:", error);
+        }
 
-            if (!val) {
-                setSent(true);
-            } else {
+        setIsSubmitting(true);
+        setSent(true);
+        try {
+            const saved = await writeToDb(pitScoutingPath(teamnum), data);
+            if (!saved) {
                 setSent(false);
+                return;
             }
 
-            setSent(false);
-
+            setSent(true);
             const pathname = window.location.pathname;
-
             if (pathname === "/pitscouting") {
                 goBack();
             }
+        } finally {
+            setIsSubmitting(false);
         }
     }
     const buttonStyle =
@@ -192,8 +198,12 @@ const PitScoutingForm: React.FC = () => {
                 value={outpost}
                 onChange={setOutpost}
             />
-            <button className={buttonStyle} onClick={submitData}>
-                Submit
+            <button
+                className={buttonStyle}
+                onClick={submitData}
+                disabled={isSubmitting}
+            >
+                {isSubmitting ? "Saving..." : "Submit"}
             </button>
             {!sent ? (
                 <div className="flex flex-col items-center space-y-2 ">

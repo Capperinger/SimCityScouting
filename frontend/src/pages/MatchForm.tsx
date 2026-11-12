@@ -6,9 +6,12 @@ import IntegerInput from "../components/IntegerInput";
 import Dropdown from "../components/Dropdown";
 import AutoResizeTextarea from "../components/AutoResizeTextArea";
 import CheckboxDropdown from "../components/CheckboxDropdown";
-import { writeToDb, wsSend } from "../scripts/firebase";
+import {
+    matchScoutingPath,
+    writeToDb,
+    wsSend,
+} from "../scripts/firebase";
 import { isDataProtectionEnabled, readCookie } from "../scripts/user";
-import { debug } from "../scripts/debug";
 import { useTimer } from "../scripts/timer";
 import { log } from "../scripts/log";
 import DropdownSearch from "../components/DropdownSearch";
@@ -58,6 +61,7 @@ const MatchForm: React.FC = () => {
 
     // this boolean is used to show a message if the data was not sent
     const [sent, setSent] = useState<boolean>(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     // Setup values
     const [eventName, setEventName] = useState<string>("");
     const [teamNumber, setTeamNumber] = useState<string>("");
@@ -188,7 +192,6 @@ const MatchForm: React.FC = () => {
 
             if (currentPhase === "auto") {
                 // Timer phase transitions intentionally synchronize the active form section.
-                // eslint-disable-next-line react-hooks/set-state-in-effect
                 setSection("auto");
             } else if (currentPhase.startsWith("teleop")) {
                 setSection("teleop");
@@ -204,14 +207,20 @@ const MatchForm: React.FC = () => {
     }, [seconds, reset]);
 
     async function submitData() {
-        //make sure certain fields are filled out
-        const check: boolean =
-            eventName !== "" && teamNumber !== "" && matchNumber !== 0;
+        const parsedTeamNumber = Number(teamNumber);
+        const scoutName = readCookie("user");
+        const check =
+            eventName !== "" &&
+            Number.isSafeInteger(parsedTeamNumber) &&
+            parsedTeamNumber > 0 &&
+            Number.isSafeInteger(matchNumber) &&
+            matchNumber > 0 &&
+            scoutName !== undefined;
 
         const data = {
-            name: readCookie("user"),
+            name: scoutName,
             eventName: eventName,
-            teamNumber: parseInt(teamNumber),
+            teamNumber: parsedTeamNumber,
             matchNumber: matchNumber,
 
             autoFuel: autoFuel,
@@ -259,27 +268,40 @@ const MatchForm: React.FC = () => {
         The path for block of data will be submitted as follows:
         /{eventName}/{teamNumber}/{matchNumber}/{timestamp}, timestamp is not finished
         */
-        if (!check && !debug) {
-            alert("Please fill out all required fields before submitting.");
-        } else {
+        if (!check) {
+            alert(
+                "Please sign in and enter a valid event, team number, and match number before submitting.",
+            );
+            return;
+        }
+
+        try {
             localStorage.setItem(
                 `scoutData-${teamNumber}-${matchNumber}`,
                 JSON.stringify(data),
             );
-            setSent(false);
-            const val = await writeToDb(
-                `${teamNumber?.toString()}/${matchNumber?.toString()}`,
+        } catch (error) {
+            console.error("Unable to save the local match backup:", error);
+        }
+        setIsSubmitting(true);
+        setSent(true);
+        try {
+            const saved = await writeToDb(
+                matchScoutingPath(parsedTeamNumber, matchNumber),
                 data,
             );
-            if (!val) {
-                setSent(true);
-            } else {
+            if (!saved) {
                 setSent(false);
+                return;
             }
+
+            setSent(true);
             const pathname = window.location.pathname;
             if (pathname === "/match") {
                 goBack();
             }
+        } finally {
+            setIsSubmitting(false);
         }
     }
 
@@ -640,8 +662,12 @@ const MatchForm: React.FC = () => {
                         onChange={setNotes}
                         placeholder="Other notes about robot"
                     />
-                    <button className={buttonStyle} onClick={submitData}>
-                        Submit
+                    <button
+                        className={buttonStyle}
+                        onClick={submitData}
+                        disabled={isSubmitting}
+                    >
+                        {isSubmitting ? "Saving..." : "Submit"}
                     </button>
                     {!sent ? (
                         <div className="flex flex-col items-center space-y-2 ">

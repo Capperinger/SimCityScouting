@@ -1,6 +1,10 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { writeToDb } from "../scripts/firebase";
+import {
+    matchScoutingPath,
+    pitScoutingPath,
+    writeToDb,
+} from "../scripts/firebase";
 import ReactJsonView from "@microlink/react-json-view";
 import seedDataBase from "../scripts/seed";
 import IntegerInput from "../components/IntegerInput";
@@ -14,10 +18,13 @@ interface ActionComponentProps {
 
 interface StoredScoutingData extends Record<string, unknown> {
     teamNumber: number | string;
-    matchNumber: number | string;
+    matchNumber?: number | string;
 }
 
-function isStoredScoutingData(value: unknown): value is StoredScoutingData {
+function isStoredScoutingData(
+    value: unknown,
+    isPitScouting: boolean,
+): value is StoredScoutingData {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
         return false;
     }
@@ -27,7 +34,10 @@ function isStoredScoutingData(value: unknown): value is StoredScoutingData {
         (typeof number === "number" && Number.isFinite(number)) ||
         (typeof number === "string" && number.trim() !== "");
 
-    return hasValidNumber(data.teamNumber) && hasValidNumber(data.matchNumber);
+    return (
+        hasValidNumber(data.teamNumber) &&
+        (isPitScouting || hasValidNumber(data.matchNumber))
+    );
 }
 
 function parseJsonOrEmpty(value: string): object {
@@ -150,17 +160,23 @@ const LocalStorageView: React.FC = () => {
             return;
         }
 
-        if (!isStoredScoutingData(parsed)) {
+        const isPitScouting = selectedKey.startsWith("pitData-");
+        if (!isStoredScoutingData(parsed, isPitScouting)) {
             setSubmissionError(
-                "The selected item must be a scouting record with a team number and match number.",
+                isPitScouting
+                    ? "The selected item must be pit scouting data with a team number."
+                    : "The selected item must be match scouting data with a team number and match number.",
             );
             return;
         }
 
-        const saved = await writeToDb(
-            `${parsed.teamNumber}/${parsed.matchNumber}`,
-            parsed,
-        );
+        const path = isPitScouting
+            ? pitScoutingPath(parsed.teamNumber)
+            : matchScoutingPath(
+                  parsed.teamNumber,
+                  String(parsed.matchNumber),
+              );
+        const saved = await writeToDb(path, parsed);
         if (!saved) {
             setSubmissionError(
                 "Firebase did not save this item. Check your connection and try again.",
@@ -177,7 +193,10 @@ const LocalStorageView: React.FC = () => {
         try {
             const seedJson = seedDataBase(seedNumber);
             const saved = await writeToDb(
-                `${seedJson.teamNumber}/${seedJson.matchNumber}`,
+                matchScoutingPath(
+                    seedJson.teamNumber,
+                    seedJson.matchNumber,
+                ),
                 seedJson,
             );
             setSeedMessage(

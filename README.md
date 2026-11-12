@@ -58,9 +58,11 @@ Every request on the server side has 2 properties: req (request), and res (respo
 - CLIENT SIDE (frontend/src/scripts/firebase.tsx)
 --
   - Most of the functions simply make a post request to server.js, except
-  - register(): creates a Firebase Authentication user and stores a SHA-256 password hash in Firestore.
+  - register(): creates a Firebase Authentication user, stores the password hash at `auth/{uid}`, and stores the account profile at `users/{uid}` in Firestore. Registration is only reported as successful after both Firestore writes commit.
 
 The frontend uses the relative `/api` path in both environments. Vite proxies it to the backend during development, and `frontend/vercel.json` forwards it to the backend deployment in production. Keep those two destinations aligned when changing the backend deployment.
+
+Scouting submissions, local-data resubmissions, and seeder records are stored in Cloud Firestore: match records use `match scouting/{teamNumber}/matches/{matchNumber}`, and pit records use `pit scouting/{teamNumber}`. The backend confirms a successful Firestore commit before the frontend reports success. Online-presence heartbeats remain in Firebase Realtime Database.
 ## Components (frontend/src/components)
 
 ### AutoResizeTextArea 
