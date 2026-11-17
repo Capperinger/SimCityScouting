@@ -86,8 +86,9 @@ const PitScoutingForm: React.FC = () => {
             return;
         }
 
+        const localStorageKey = `pitData-${teamnum}`;
         try {
-            localStorage.setItem(`pitData-${teamnum}`, JSON.stringify(data));
+            localStorage.setItem(localStorageKey, JSON.stringify(data));
         } catch (error) {
             console.error("Unable to save the local pit scouting backup:", error);
         }
@@ -99,6 +100,12 @@ const PitScoutingForm: React.FC = () => {
             if (!saved) {
                 setSent(false);
                 return;
+            }
+
+            try {
+                localStorage.removeItem(localStorageKey);
+            } catch (error) {
+                console.error("Unable to remove the saved pit scouting backup:", error);
             }
 
             setSent(true);

@@ -63,6 +63,17 @@ Every request on the server side has 2 properties: req (request), and res (respo
 The frontend uses the relative `/api` path in both environments. Vite proxies it to the backend during development, and `frontend/vercel.json` forwards it to the backend deployment in production. Keep those two destinations aligned when changing the backend deployment.
 
 Scouting submissions, local-data resubmissions, and seeder records are stored in Cloud Firestore: match records use `match scouting/{teamNumber}/matches/{matchNumber}`, and pit records use `pit scouting/{teamNumber}`. The backend confirms a successful Firestore commit before the frontend reports success. Online-presence heartbeats remain in Firebase Realtime Database.
+
+Failed scouting submissions stay in local storage and are retried when the app is open, the user is signed in, and the device reconnects. A local copy is removed only after the backend confirms the Firestore write.
+
+The backend is deployed from the repository root as an Express app (Vercel Root Directory: repository root). The frontend Vercel project should use `frontend` as its Root Directory so it reads `frontend/vercel.json`. Configure these environment variables in the backend deployment:
+
+- `SERVICE_ACCOUNT_KEY`: the Firebase service-account JSON (never commit or share this value).
+- `FIREBASE_PROJECT_ID`: the project ID that owns the service account.
+- `FIREBASE_DATABASE_URL`: the exact Realtime Database URL for that project.
+
+If `FIREBASE_PROJECT_ID` is omitted, the backend uses the service account's `project_id`. If `FIREBASE_DATABASE_URL` is omitted, it uses that project's default Realtime Database URL. Set both explicitly when using a non-default database. The service account project must match `FIREBASE_PROJECT_ID`.
+
 ## Components (frontend/src/components)
 
 ### AutoResizeTextArea 

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import MatchForm from "./pages/MatchForm";
@@ -6,8 +7,37 @@ import LoginPage from "./pages/Login";
 import SignupPage from "./pages/Signup";
 import PitScoutingForm from "./pages/pitScoutingForm";
 import Online from "./pages/online";
+import { syncStoredScoutingData } from "./scripts/firebase";
+import { readCookie } from "./scripts/user";
 
 function App() {
+    const isSyncingStoredData = useRef(false);
+
+    useEffect(() => {
+        const syncStoredData = async () => {
+            if (
+                isSyncingStoredData.current ||
+                !navigator.onLine ||
+                !readCookie("uid")
+            ) {
+                return;
+            }
+
+            isSyncingStoredData.current = true;
+            try {
+                await syncStoredScoutingData();
+            } catch (error) {
+                console.error("Unable to sync saved scouting data:", error);
+            } finally {
+                isSyncingStoredData.current = false;
+            }
+        };
+
+        void syncStoredData();
+        window.addEventListener("online", syncStoredData);
+        return () => window.removeEventListener("online", syncStoredData);
+    }, []);
+
     return (
         <BrowserRouter>
             {/* Make flex column for sticky footer */}

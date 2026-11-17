@@ -1,15 +1,40 @@
 import express from "express";
 import dotenv from "dotenv";
 import admin from "firebase-admin";
-import { createServer } from "http";
-import { WebSocketServer } from "ws";
+import { pathToFileURL } from "node:url";
 
 dotenv.config();
 
-const FIREBASE_PROJECT_ID = "sim-city-scouting-rebuilt-test";
+const serviceAccountKey = process.env.SERVICE_ACCOUNT_KEY;
+if (!serviceAccountKey) {
+    throw new Error("SERVICE_ACCOUNT_KEY must be configured");
+}
+
+let serviceAccount;
+try {
+    serviceAccount = JSON.parse(serviceAccountKey);
+} catch {
+    throw new Error("SERVICE_ACCOUNT_KEY must contain valid JSON");
+}
+if (
+    typeof serviceAccount !== "object" ||
+    serviceAccount === null ||
+    Array.isArray(serviceAccount)
+) {
+    throw new Error("SERVICE_ACCOUNT_KEY must contain a service-account object");
+}
+
+const FIREBASE_PROJECT_ID =
+    process.env.FIREBASE_PROJECT_ID || serviceAccount.project_id;
+if (typeof FIREBASE_PROJECT_ID !== "string" || !FIREBASE_PROJECT_ID) {
+    throw new Error(
+        "Set FIREBASE_PROJECT_ID or provide a project_id in SERVICE_ACCOUNT_KEY",
+    );
+}
+
 const FIREBASE_DATABASE_URL =
-    "https://sim-city-scouting-rebuilt-test-default-rtdb.firebaseio.com";
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_KEY);
+    process.env.FIREBASE_DATABASE_URL ||
+    `https://${FIREBASE_PROJECT_ID}-default-rtdb.firebaseio.com`;
 
 if (serviceAccount.project_id !== FIREBASE_PROJECT_ID) {
     throw new Error(
@@ -26,11 +51,9 @@ admin.initializeApp({
 const db = admin.firestore();
 const rt = admin.database();
 
-const wss = new WebSocketServer({ noServer: true });
 const app = express();
-const server = createServer(app);
 const router = express.Router();
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 const allowedOrigins = new Set([
     "https://sim-city-scouting.vercel.app",
     "https://3464scouting.vercel.app",
@@ -341,6 +364,13 @@ router.post("/readRt", async (req, res) => {
 
 app.use("/api", router);
 
-server.listen(PORT, () => {
-    console.log(`currently running on ${PORT}`);
-});
+export default app;
+
+if (
+    process.argv[1] &&
+    import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+    app.listen(PORT, () => {
+        console.log(`currently running on ${PORT}`);
+    });
+}

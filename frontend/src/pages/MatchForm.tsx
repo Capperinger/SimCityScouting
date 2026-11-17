@@ -46,7 +46,7 @@ const MatchForm: React.FC = () => {
     useEffect(() => {
         const intervalId = setInterval(() => {
             wsSend(readCookie("user") ?? "");
-        }, 5000);
+        }, 30000);
 
         return () => {
             clearInterval(intervalId);
@@ -112,7 +112,7 @@ const MatchForm: React.FC = () => {
     const robotErrors = [
         "Intake issues",
         "Shooter issues",
-        "Stuck on Fuel",
+        "Stuck on fuel",
         "Climb Failed",
         "Robot unresponsive",
         "Part broke off",
@@ -275,9 +275,10 @@ const MatchForm: React.FC = () => {
             return;
         }
 
+        const localStorageKey = `scoutData-${teamNumber}-${matchNumber}`;
         try {
             localStorage.setItem(
-                `scoutData-${teamNumber}-${matchNumber}`,
+                localStorageKey,
                 JSON.stringify(data),
             );
         } catch (error) {
@@ -293,6 +294,12 @@ const MatchForm: React.FC = () => {
             if (!saved) {
                 setSent(false);
                 return;
+            }
+
+            try {
+                localStorage.removeItem(localStorageKey);
+            } catch (error) {
+                console.error("Unable to remove the saved match backup:", error);
             }
 
             setSent(true);

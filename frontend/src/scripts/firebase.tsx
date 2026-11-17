@@ -25,6 +25,83 @@ export const matchScoutingPath = (
 export const pitScoutingPath = (teamNumber: number | string) =>
     `pit scouting/${teamNumber}`;
 
+function isPositiveInteger(value: unknown): value is number | string {
+    if (typeof value === "number") {
+        return Number.isSafeInteger(value) && value > 0;
+    }
+
+    return (
+        typeof value === "string" &&
+        /^\d+$/.test(value) &&
+        Number.isSafeInteger(Number(value)) &&
+        Number(value) > 0
+    );
+}
+
+function isScoutingData(value: unknown): value is ScoutingData {
+    return (
+        typeof value === "object" &&
+        value !== null &&
+        !Array.isArray(value) &&
+        "teamNumber" in value
+    );
+}
+
+export async function syncStoredScoutingData() {
+    const storedKeys = Object.keys(localStorage).filter(
+        (key) => key.startsWith("scoutData-") || key.startsWith("pitData-"),
+    );
+
+    for (const key of storedKeys) {
+        const storedValue = localStorage.getItem(key);
+        if (!storedValue) {
+            continue;
+        }
+
+        let data: unknown;
+        try {
+            data = JSON.parse(storedValue);
+        } catch (error) {
+            console.error(`Unable to parse saved scouting data ${key}:`, error);
+            continue;
+        }
+
+        if (!isScoutingData(data)) {
+            console.error(`Saved scouting data ${key} is invalid and was kept.`);
+            continue;
+        }
+
+        const teamNumber = data.teamNumber;
+        if (!isPositiveInteger(teamNumber)) {
+            console.error(`Saved scouting data ${key} is invalid and was kept.`);
+            continue;
+        }
+
+        const isPitScouting = key.startsWith("pitData-");
+        let path: string;
+        if (isPitScouting) {
+            path = pitScoutingPath(teamNumber);
+        } else {
+            const matchNumber = data.matchNumber;
+            if (!isPositiveInteger(matchNumber)) {
+                console.error(
+                    `Saved scouting data ${key} is invalid and was kept.`,
+                );
+                continue;
+            }
+            path = matchScoutingPath(teamNumber, matchNumber);
+        }
+
+        if (await writeData(path, data, false)) {
+            try {
+                localStorage.removeItem(key);
+            } catch (error) {
+                console.error(`Unable to remove saved scouting data ${key}:`, error);
+            }
+        }
+    }
+}
+
 export async function rt(path: string): Promise<unknown> {
     const response = await fetch(`${LINK}/readRt`, {
         method: "POST",
@@ -54,7 +131,11 @@ export async function de() {
     return whiteList.includes(uid);
 }
 
-async function writeData(path: string, data: unknown) {
+async function writeData(
+    path: string,
+    data: unknown,
+    notifyUser = true,
+) {
     try {
         const body = {
             path: path,
@@ -72,9 +153,11 @@ async function writeData(path: string, data: unknown) {
             console.error(
                 `Firebase write failed (${response.status}): ${responseBody}`,
             );
-            alert(
-                `Firebase could not save your data (${response.status})${responseBody ? `: ${responseBody}` : ""}`,
-            );
+            if (notifyUser) {
+                alert(
+                    `Firebase could not save your data (${response.status})${responseBody ? `: ${responseBody}` : ""}`,
+                );
+            }
             return false;
         }
 
@@ -101,9 +184,11 @@ async function writeData(path: string, data: unknown) {
         return true;
     } catch (err) {
         console.error("Error writing document:", err);
-        alert(
-            `Firebase did not confirm saving your data${err instanceof Error ? `: ${err.message}` : ". Please check your connection and try again."}`,
-        );
+        if (notifyUser) {
+            alert(
+                `Firebase did not confirm saving your data${err instanceof Error ? `: ${err.message}` : ". Please check your connection and try again."}`,
+            );
+        }
         return false;
     }
 }

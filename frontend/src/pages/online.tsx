@@ -29,7 +29,7 @@ const Online: React.FC = () => {
         const currentEpoch = Math.floor(Date.now() / 1000);
 
         return Object.entries(inputData).reduce((acc, [key, val]) => {
-            acc[key] = (currentEpoch - val.time)<10;
+            acc[key] = currentEpoch - val.time < 65;
             return (acc);
         }, {} as DiffsJson);
     };
@@ -39,7 +39,7 @@ const Online: React.FC = () => {
 
     return (
         <div className="p-10">
-            <h2 className="font-bold text-white text-l pb-1">click right side or bottom button twice. "true" means user detected in last 10 seconds</h2>
+            <h2 className="font-bold text-white text-l pb-1">click right side or bottom button twice. "true" means user detected in the last 65 seconds</h2>
             <button
                 onClick={() => {
                     window.location.href = "/";
