@@ -21,6 +21,12 @@ interface StoredScoutingData extends Record<string, unknown> {
     matchNumber?: number | string;
 }
 
+const isScoutingStorageKey = (key: string) =>
+    key.startsWith("scoutData-") || key.startsWith("pitData-");
+
+const getScoutingStorageKeys = () =>
+    Object.keys(localStorage).filter(isScoutingStorageKey);
+
 function isStoredScoutingData(
     value: unknown,
     isPitScouting: boolean,
@@ -117,7 +123,7 @@ const LocalStorageView: React.FC = () => {
 
     React.useEffect(() => {
         if (typeof window !== "undefined") {
-            setKeys(Object.keys(localStorage));
+            setKeys(getScoutingStorageKeys());
         }
     }, []);
 
@@ -131,15 +137,29 @@ const LocalStorageView: React.FC = () => {
         if (!selectedKey) return;
         localStorage.removeItem(selectedKey);
         setValue("");
-        setKeys(Object.keys(localStorage));
+        setKeys(getScoutingStorageKeys());
     };
 
     const clear = () => {
-        if (window.confirm("Are you sure you want to clear local storage?")) {
-            localStorage.clear();
-            setSelectedKey("");
-            setValue("");
-            setKeys([]);
+        setSubmissionError("");
+        if (
+            window.confirm(
+                "Clear all locally saved match and pit scouting data? This removes unsent scouting backups from this device. Your saved sign-in and preferences will remain.",
+            )
+        ) {
+            try {
+                for (const key of getScoutingStorageKeys()) {
+                    localStorage.removeItem(key);
+                }
+                setSelectedKey("");
+                setValue("");
+                setKeys(getScoutingStorageKeys());
+            } catch (error) {
+                console.error("Unable to clear local scouting data:", error);
+                setSubmissionError(
+                    "Could not clear all local scouting backups. Some items may remain on this device.",
+                );
+            }
         }
     };
 
@@ -184,6 +204,15 @@ const LocalStorageView: React.FC = () => {
             return;
         }
 
+        try {
+            localStorage.removeItem(selectedKey);
+        } catch (error) {
+            console.error("Firebase saved the item, but its local copy remains:", error);
+            setSubmissionError(
+                "Firebase saved this item, but its local copy could not be removed from this device.",
+            );
+            return;
+        }
         window.location.href = "/";
     };
 
