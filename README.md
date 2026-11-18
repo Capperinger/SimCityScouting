@@ -60,13 +60,13 @@ Every request on the server side has 2 properties: req (request), and res (respo
   - Most of the functions simply make a post request to server.js, except
   - register(): creates a Firebase Authentication user, stores the password hash at `auth/{uid}`, and stores the account profile at `users/{uid}` in Firestore. Registration is only reported as successful after both Firestore writes commit.
 
-The frontend uses the relative `/api` path in both environments. Vite proxies it to the backend during development, and `frontend/vercel.json` forwards it to the backend deployment in production. Keep those two destinations aligned when changing the backend deployment.
+The frontend uses the relative `/api` path in both environments. During development, Vite proxies requests to the local backend on port 3000. In production, `frontend/vercel.json` routes API requests to the Vercel function in `frontend/api`.
 
 Scouting submissions, local-data resubmissions, and seeder records are stored in Cloud Firestore: match records use `match scouting/{teamNumber}/matches/{matchNumber}`, and pit records use `pit scouting/{teamNumber}`. The backend confirms a successful Firestore commit before the frontend reports success. Online-presence heartbeats remain in Firebase Realtime Database.
 
 Failed scouting submissions stay in local storage and are retried when the app is open, the user is signed in, and the device reconnects. A local copy is removed only after the backend confirms the Firestore write.
 
-The backend is deployed from the repository root as an Express app (Vercel Root Directory: repository root). The frontend Vercel project should use `frontend` as its Root Directory so it reads `frontend/vercel.json`. Configure these environment variables in the backend deployment:
+The Vercel project uses `frontend` as its Root Directory and serves both the app and Firebase API from that deployment. Configure these environment variables in that Vercel project's Production environment (and Preview if needed):
 
 - `SERVICE_ACCOUNT_KEY`: the Firebase service-account JSON (never commit or share this value).
 - `FIREBASE_PROJECT_ID`: the project ID that owns the service account.
