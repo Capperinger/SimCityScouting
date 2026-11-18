@@ -11,9 +11,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://scout4364i.vercel.app',
+        target: 'http://localhost:3000',
         changeOrigin: true,
-        secure: true,
       },
     },
   },
