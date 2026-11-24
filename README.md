@@ -64,9 +64,7 @@ The frontend uses the relative `/api` path in both environments. During developm
 
 Scouting submissions, local-data resubmissions, and seeder records are stored in Cloud Firestore: match records use `match scouting/{teamNumber}/matches/{matchNumber}`, and pit records use `pit scouting/{teamNumber}`. The backend confirms a successful Firestore commit before the frontend reports success. Online-presence heartbeats remain in Firebase Realtime Database.
 
-Failed scouting submissions stay in local storage and are retried when the app is open, the user is signed in, and the device reconnects. A local copy is removed only after the backend confirms the Firestore write.
-
-The Stored Data page can list match and pit scouting document paths already in Firestore and load a selected record for viewing.
+Match scouting forms are saved to local storage first. Review a saved match on the Stored Data page, then submit it individually or submit all saved data. Local copies are removed only after the backend confirms the Firestore write. Automatically saved pit scouting data is retried when the app is open, the user is signed in, and the device reconnects.
 
 The Vercel project uses `frontend` as its Root Directory and serves both the app and Firebase API from that deployment. Configure these environment variables in that Vercel project's Production environment (and Preview if needed):
 

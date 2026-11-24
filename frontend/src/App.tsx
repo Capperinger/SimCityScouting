@@ -25,7 +25,7 @@ function App() {
 
             isSyncingStoredData.current = true;
             try {
-                await syncStoredScoutingData();
+                await syncStoredScoutingData({ includeMatches: false });
             } catch (error) {
                 console.error("Unable to sync saved scouting data:", error);
             } finally {
