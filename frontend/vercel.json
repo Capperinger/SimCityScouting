@@ -9,6 +9,10 @@
             "destination": "/api/index?route=login"
         },
         {
+            "source": "/api/list",
+            "destination": "/api/index?route=list"
+        },
+        {
             "source": "/api/read",
             "destination": "/api/index?route=read"
         },

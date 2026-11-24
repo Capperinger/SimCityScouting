@@ -66,6 +66,8 @@ Scouting submissions, local-data resubmissions, and seeder records are stored in
 
 Failed scouting submissions stay in local storage and are retried when the app is open, the user is signed in, and the device reconnects. A local copy is removed only after the backend confirms the Firestore write.
 
+The Stored Data page can list match and pit scouting document paths already in Firestore and load a selected record for viewing.
+
 The Vercel project uses `frontend` as its Root Directory and serves both the app and Firebase API from that deployment. Configure these environment variables in that Vercel project's Production environment (and Preview if needed):
 
 - `SERVICE_ACCOUNT_KEY`: the Firebase service-account JSON (never commit or share this value).
