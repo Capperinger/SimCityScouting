@@ -1,11 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+    listScoutingRecords,
     matchScoutingPath,
     pitScoutingPath,
+    readScoutingRecord,
     syncStoredScoutingData,
     writeToDb,
 } from "../scripts/firebase";
+import type { ScoutingRecordReference } from "../scripts/firebase";
 import ReactJsonView from "@microlink/react-json-view";
 import seedDataBase from "../scripts/seed";
 import IntegerInput from "../components/IntegerInput";
@@ -129,20 +132,86 @@ const LocalStorageView: React.FC = () => {
     const [submissionError, setSubmissionError] = React.useState("");
     const [submissionMessage, setSubmissionMessage] =
         React.useState("");
+    const [firebaseRecords, setFirebaseRecords] = React.useState<
+        ScoutingRecordReference[]
+    >([]);
+    const [selectedFirebasePath, setSelectedFirebasePath] =
+        React.useState("");
+    const [firebaseRecordsError, setFirebaseRecordsError] =
+        React.useState("");
+    const [firebaseRecordsMessage, setFirebaseRecordsMessage] =
+        React.useState("");
+    const [loadingFirebaseRecords, setLoadingFirebaseRecords] =
+        React.useState(false);
+    const [loadingFirebaseRecord, setLoadingFirebaseRecord] =
+        React.useState(false);
     const [submittingAll, setSubmittingAll] = React.useState(false);
     const [seeding, setSeeding] = React.useState(false);
     const [seedMessage, setSeedMessage] = React.useState("");
 
+    const refreshFirebaseRecords = React.useCallback(async () => {
+        setLoadingFirebaseRecords(true);
+        setFirebaseRecordsError("");
+        try {
+            setFirebaseRecords(await listScoutingRecords());
+        } catch (error) {
+            console.error("Unable to load submitted scouting records:", error);
+            setFirebaseRecordsError(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to load submitted scouting records.",
+            );
+        } finally {
+            setLoadingFirebaseRecords(false);
+        }
+    }, []);
+
     React.useEffect(() => {
         if (typeof window !== "undefined") {
             setKeys(getScoutingStorageKeys());
+            void refreshFirebaseRecords();
         }
-    }, []);
+    }, [refreshFirebaseRecords]);
 
     const loadItem = () => {
         if (!selectedKey) return;
         const v = localStorage.getItem(selectedKey);
         setValue(v ?? "");
+        setSelectedFirebasePath("");
+        setFirebaseRecordsMessage("");
+    };
+
+    const loadFirebaseRecord = async () => {
+        if (!selectedFirebasePath) {
+            setFirebaseRecordsError("Select a submitted record to load.");
+            return;
+        }
+
+        setLoadingFirebaseRecord(true);
+        setFirebaseRecordsError("");
+        setFirebaseRecordsMessage("");
+        try {
+            const record = await readScoutingRecord(selectedFirebasePath);
+            setValue(JSON.stringify(record, null, 2));
+            setSelectedKey("");
+            const selectedRecord = firebaseRecords.find(
+                (item) => item.path === selectedFirebasePath,
+            );
+            setFirebaseRecordsMessage(
+                selectedRecord
+                    ? `Loaded ${selectedRecord.path} from Firebase.`
+                    : `Loaded ${selectedFirebasePath} from Firebase.`,
+            );
+        } catch (error) {
+            console.error("Unable to load submitted scouting record:", error);
+            setFirebaseRecordsError(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to load the submitted record.",
+            );
+        } finally {
+            setLoadingFirebaseRecord(false);
+        }
     };
 
     const submitAll = async () => {
@@ -172,6 +241,7 @@ const LocalStorageView: React.FC = () => {
             const result = await syncStoredScoutingData();
             const remainingKeys = getScoutingStorageKeys();
             setKeys(remainingKeys);
+            await refreshFirebaseRecords();
             if (selectedKey && !remainingKeys.includes(selectedKey)) {
                 setSelectedKey("");
                 setValue("");
@@ -273,6 +343,7 @@ const LocalStorageView: React.FC = () => {
             return;
         }
 
+        await refreshFirebaseRecords();
         try {
             localStorage.removeItem(selectedKey);
         } catch (error) {
@@ -310,6 +381,9 @@ const LocalStorageView: React.FC = () => {
                     ? `Seed data saved for team ${seedJson.teamNumber}, match ${seedJson.matchNumber}.`
                     : "Firebase did not save the seed data. Check your connection and try again.",
             );
+            if (saved) {
+                await refreshFirebaseRecords();
+            }
         } catch (error) {
             console.error("Unable to seed Firebase:", error);
             setSeedMessage(
@@ -343,7 +417,11 @@ const LocalStorageView: React.FC = () => {
                 <select
                     className="bg-gray-800 text-white px-4 py-2 rounded-xl"
                     value={selectedKey}
-                    onChange={(e) => setSelectedKey(e.target.value)}
+                    onChange={(e) => {
+                        setSelectedKey(e.target.value);
+                        setSelectedFirebasePath("");
+                        setFirebaseRecordsMessage("");
+                    }}
                     disabled={submittingAll}
                 >
                     <option value="">Select a match</option>
@@ -377,6 +455,81 @@ const LocalStorageView: React.FC = () => {
                         {submissionMessage}
                     </p>
                 )}
+
+                <section className="w-full max-w-xl rounded-xl bg-gray-900 p-4 text-white">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                        <h2 className="text-xl font-semibold">
+                            Submitted records in Firebase
+                        </h2>
+                        <button
+                            onClick={() => void refreshFirebaseRecords()}
+                            disabled={loadingFirebaseRecords}
+                            className="rounded bg-gray-700 px-3 py-1 text-sm hover:bg-gray-600 disabled:opacity-50"
+                        >
+                            {loadingFirebaseRecords
+                                ? "Refreshing..."
+                                : "Refresh"}
+                        </button>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-300">
+                        Select a Firebase key to load its saved scouting data.
+                    </p>
+
+                    <select
+                        className="mt-3 w-full rounded-xl bg-gray-800 px-4 py-2 text-white"
+                        value={selectedFirebasePath}
+                        onChange={(event) => {
+                            setSelectedFirebasePath(event.target.value);
+                            setSelectedKey("");
+                            setFirebaseRecordsError("");
+                            setFirebaseRecordsMessage("");
+                        }}
+                        disabled={loadingFirebaseRecords || submittingAll}
+                    >
+                        <option value="">
+                            {loadingFirebaseRecords
+                                ? "Loading Firebase records..."
+                                : "Select a submitted record"}
+                        </option>
+                        {firebaseRecords.map((record) => (
+                            <option key={record.path} value={record.path}>
+                                {record.path}
+                            </option>
+                        ))}
+                    </select>
+
+                    <button
+                        onClick={loadFirebaseRecord}
+                        disabled={
+                            !selectedFirebasePath ||
+                            loadingFirebaseRecord ||
+                            submittingAll
+                        }
+                        className="mt-3 rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                        {loadingFirebaseRecord
+                            ? "Loading record..."
+                            : "Load submitted record"}
+                    </button>
+
+                    {firebaseRecords.length === 0 &&
+                        !loadingFirebaseRecords &&
+                        !firebaseRecordsError && (
+                        <p className="mt-3 text-gray-300">
+                            No submitted scouting records found.
+                        </p>
+                        )}
+                    {firebaseRecordsError && (
+                        <p className="mt-3 text-red-400" role="alert">
+                            {firebaseRecordsError}
+                        </p>
+                    )}
+                    {firebaseRecordsMessage && (
+                        <p className="mt-3 text-green-300" role="status">
+                            {firebaseRecordsMessage}
+                        </p>
+                    )}
+                </section>
 
                 <ReactJsonView
                     src={parseJsonOrEmpty(value)}
