@@ -12,20 +12,16 @@ type ScoutingData = Record<string, unknown> & {
     matchNumber?: number | string;
 };
 
-export interface SubmittedScoutingRecord {
-    id: string;
+export interface ScoutingRecordReference {
+    path: string;
     type: "match" | "pit";
     teamNumber: string;
     matchNumber?: string;
-    submittedAt: string;
 }
 
 type TeamListResponse = {   
     team?: Array<number | string>;
 };
-
-const SUBMISSION_HISTORY_KEY = "scoutingSubmissionHistory";
-const SUBMISSION_HISTORY_LIMIT = 50;
 
 export const matchScoutingPath = (
     teamNumber: number | string,
@@ -56,105 +52,6 @@ function isScoutingData(value: unknown): value is ScoutingData {
         !Array.isArray(value) &&
         "teamNumber" in value
     );
-}
-
-function isSubmittedScoutingRecord(
-    value: unknown,
-): value is SubmittedScoutingRecord {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        return false;
-    }
-
-    const record = value as Record<string, unknown>;
-    return (
-        typeof record.id === "string" &&
-        (record.type === "match" || record.type === "pit") &&
-        typeof record.teamNumber === "string" &&
-        record.teamNumber.length > 0 &&
-        (record.type !== "match" ||
-            (typeof record.matchNumber === "string" &&
-                record.matchNumber.length > 0)) &&
-        typeof record.submittedAt === "string"
-    );
-}
-
-export function getSubmittedScoutingHistory(): SubmittedScoutingRecord[] {
-    try {
-        const stored = localStorage.getItem(SUBMISSION_HISTORY_KEY);
-        if (!stored) {
-            return [];
-        }
-
-        const parsed: unknown = JSON.parse(stored);
-        if (!Array.isArray(parsed)) {
-            throw new Error("Submission history must be a list.");
-        }
-
-        return parsed
-            .filter(isSubmittedScoutingRecord)
-            .slice(0, SUBMISSION_HISTORY_LIMIT);
-    } catch (error) {
-        console.error("Unable to load scouting submission history:", error);
-        return [];
-    }
-}
-
-export function clearSubmittedScoutingHistory() {
-    localStorage.removeItem(SUBMISSION_HISTORY_KEY);
-}
-
-function recordSubmittedScoutingData(path: string, value: unknown) {
-    if (!isScoutingData(value) || !isPositiveInteger(value.teamNumber)) {
-        return;
-    }
-
-    const segments = path.split("/");
-    const teamNumber = String(value.teamNumber);
-    let record: SubmittedScoutingRecord | null = null;
-
-    if (
-        segments.length === 4 &&
-        segments[0] === "match scouting" &&
-        segments[2] === "matches" &&
-        segments[1] === teamNumber &&
-        isPositiveInteger(value.matchNumber) &&
-        segments[3] === String(value.matchNumber)
-    ) {
-        record = {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            type: "match",
-            teamNumber,
-            matchNumber: String(value.matchNumber),
-            submittedAt: new Date().toISOString(),
-        };
-    } else if (
-        segments.length === 2 &&
-        segments[0] === "pit scouting" &&
-        segments[1] === teamNumber
-    ) {
-        record = {
-            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-            type: "pit",
-            teamNumber,
-            submittedAt: new Date().toISOString(),
-        };
-    }
-
-    if (!record) {
-        return;
-    }
-
-    try {
-        const history = getSubmittedScoutingHistory();
-        localStorage.setItem(
-            SUBMISSION_HISTORY_KEY,
-            JSON.stringify(
-                [record, ...history].slice(0, SUBMISSION_HISTORY_LIMIT),
-            ),
-        );
-    } catch (error) {
-        console.error("Unable to save scouting submission history:", error);
-    }
 }
 
 export interface StoredScoutingSyncResult {
@@ -333,7 +230,6 @@ async function writeData(
                 "The server did not confirm that Firebase saved this data.",
             );
         }
-        recordSubmittedScoutingData(path, data);
         return true;
     } catch (err) {
         console.error("Error writing document:", err);
@@ -374,6 +270,91 @@ export async function readDoc(path: string): Promise<TeamListResponse> {
         console.error("Error reading document:", error);
         throw error;
     }
+}
+
+function isScoutingRecordReference(
+    value: unknown,
+): value is ScoutingRecordReference {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    const record = value as Record<string, unknown>;
+    if (
+        typeof record.path !== "string" ||
+        typeof record.teamNumber !== "string"
+    ) {
+        return false;
+    }
+
+    if (record.type === "match") {
+        return (
+            typeof record.matchNumber === "string" &&
+            record.path ===
+                matchScoutingPath(record.teamNumber, record.matchNumber)
+        );
+    }
+
+    return (
+        record.type === "pit" &&
+        record.path === pitScoutingPath(record.teamNumber)
+    );
+}
+
+export async function listScoutingRecords(): Promise<
+    ScoutingRecordReference[]
+> {
+    const response = await fetch(`${LINK}/list`);
+    if (!response.ok) {
+        throw new Error(`Unable to load submitted records (${response.status}).`);
+    }
+
+    let payload: unknown;
+    try {
+        payload = await response.json();
+    } catch {
+        throw new Error("The server returned an invalid records response.");
+    }
+    if (
+        typeof payload !== "object" ||
+        payload === null ||
+        !("records" in payload) ||
+        !Array.isArray(payload.records) ||
+        !payload.records.every(isScoutingRecordReference)
+    ) {
+        throw new Error("The server returned an invalid records response.");
+    }
+
+    return payload.records;
+}
+
+export async function readScoutingRecord(
+    path: string,
+): Promise<Record<string, unknown>> {
+    const response = await fetch(`${LINK}/read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+    });
+    if (!response.ok) {
+        throw new Error(`Unable to load this submitted record (${response.status}).`);
+    }
+
+    let data: unknown;
+    try {
+        data = await response.json();
+    } catch {
+        throw new Error("The server returned an invalid scouting record.");
+    }
+    if (
+        typeof data !== "object" ||
+        data === null ||
+        Array.isArray(data)
+    ) {
+        throw new Error("The server returned an invalid scouting record.");
+    }
+
+    return data as Record<string, unknown>;
 }
 
 async function readAuthResponse(response: Response) {
