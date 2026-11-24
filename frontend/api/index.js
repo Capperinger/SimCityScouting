@@ -3,7 +3,6 @@ import app from "../api-app.js";
 const ROUTES = new Set([
     "debug",
     "login",
-    "list",
     "read",
     "readRt",
     "register",

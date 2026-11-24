@@ -6,11 +6,7 @@ import IntegerInput from "../components/IntegerInput";
 import Dropdown from "../components/Dropdown";
 import AutoResizeTextarea from "../components/AutoResizeTextArea";
 import CheckboxDropdown from "../components/CheckboxDropdown";
-import {
-    matchScoutingPath,
-    writeToDb,
-    wsSend,
-} from "../scripts/firebase";
+import { wsSend } from "../scripts/firebase";
 import { isDataProtectionEnabled, readCookie } from "../scripts/user";
 import { useTimer } from "../scripts/timer";
 import { log } from "../scripts/log";
@@ -59,8 +55,7 @@ const MatchForm: React.FC = () => {
 
     type checkboxDropdownList = Record<string, boolean>;
 
-    // this boolean is used to show a message if the data was not sent
-    const [sent, setSent] = useState<boolean>(true);
+    const [saveError, setSaveError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
     // Setup values
     const [eventName, setEventName] = useState<string>("");
@@ -205,8 +200,8 @@ const MatchForm: React.FC = () => {
 
         if (seconds === 0) lastPhaseRef.current = "";
     }, [seconds, reset]);
-
-    async function submitData() {
+                                                            //Floyd
+    function submitData() {
         const parsedTeamNumber = Number(teamNumber);
         const scoutName = readCookie("user");
         const check =
@@ -264,10 +259,6 @@ const MatchForm: React.FC = () => {
             ),
         };
 
-        /*
-        The path for block of data will be submitted as follows:
-        /{eventName}/{teamNumber}/{matchNumber}/{timestamp}, timestamp is not finished
-        */
         if (!check) {
             alert(
                 "Please sign in and enter a valid event, team number, and match number before submitting.",
@@ -275,41 +266,21 @@ const MatchForm: React.FC = () => {
             return;
         }
 
-        const localStorageKey = `scoutData-${teamNumber}-${matchNumber}`;
+        const localStorageKey = `scoutData-${parsedTeamNumber}-${matchNumber}`;
+        setSaveError("");
+        setIsSubmitting(true);
         try {
-            localStorage.setItem(
-                localStorageKey,
-                JSON.stringify(data),
-            );
+            localStorage.setItem(localStorageKey, JSON.stringify(data));
         } catch (error) {
             console.error("Unable to save the local match backup:", error);
-        }
-        setIsSubmitting(true);
-        setSent(true);
-        try {
-            const saved = await writeToDb(
-                matchScoutingPath(parsedTeamNumber, matchNumber),
-                data,
+            setSaveError(
+                "Could not save this match on the device. Check available storage and try again.",
             );
-            if (!saved) {
-                setSent(false);
-                return;
-            }
-
-            try {
-                localStorage.removeItem(localStorageKey);
-            } catch (error) {
-                console.error("Unable to remove the saved match backup:", error);
-            }
-
-            setSent(true);
-            const pathname = window.location.pathname;
-            if (pathname === "/match") {
-                goBack();
-            }
+            return;
         } finally {
             setIsSubmitting(false);
         }
+        navigate("/stored");
     }
 
     const tab = (name: string) =>
@@ -674,28 +645,12 @@ const MatchForm: React.FC = () => {
                         onClick={submitData}
                         disabled={isSubmitting}
                     >
-                        {isSubmitting ? "Saving..." : "Submit"}
+                        {isSubmitting ? "Saving locally..." : "Save for review"}
                     </button>
-                    {!sent ? (
-                        <div className="flex flex-col items-center space-y-2 ">
-                            <h3 className="font-semibold text-red-800 text-2xl pb-1">
-                                If you are seeing this message, you either have
-                                poor connectivity, or you have encountered an
-                                error. If you encountered an error, a message
-                                should have shown up stating you had an error.
-                                If no message showed up, then you're
-                                connectivity is poor. If your data gets sent,
-                                then this page will automatically close. If you
-                                need to fill out another form, you may press the
-                                back button, but remember to submit later in the
-                                "view local storage" page.
-                            </h3>
-                            <button className={buttonStyle} onClick={goBack}>
-                                Back
-                            </button>
-                        </div>
-                    ) : (
-                        <></>
+                    {saveError && (
+                        <p className="text-center text-red-400" role="alert">
+                            {saveError}
+                        </p>
                     )}
             </>
         );

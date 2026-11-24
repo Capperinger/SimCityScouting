@@ -128,50 +128,6 @@ const read = async (req, res) => {
     }
 };
 
-router.get("/list", async (req, res) => {
-    try {
-        const [matchSnapshot, pitSnapshot] = await Promise.all([
-            db.collectionGroup("matches").get(),
-            db.collection("pit scouting").get(),
-        ]);
-        const records = [];
-
-        for (const document of matchSnapshot.docs) {
-            const segments = document.ref.path.split("/");
-            if (
-                segments.length === 4 &&
-                segments[0] === "match scouting" &&
-                /^\d+$/.test(segments[1]) &&
-                segments[2] === "matches" &&
-                /^\d+$/.test(segments[3])
-            ) {
-                records.push({
-                    path: document.ref.path,
-                    type: "match",
-                    teamNumber: segments[1],
-                    matchNumber: segments[3],
-                });
-            }
-        }
-
-        for (const document of pitSnapshot.docs) {
-            if (/^\d+$/.test(document.id)) {
-                records.push({
-                    path: document.ref.path,
-                    type: "pit",
-                    teamNumber: document.id,
-                });
-            }
-        }
-
-        records.sort((a, b) => a.path.localeCompare(b.path));
-        res.json({ records });
-    } catch (error) {
-        console.error("Unable to list scouting records:", error);
-        res.status(500).json({ message: "Unable to list scouting records" });
-    }
-});
-
 const write = async (req, res) => {
     try {
         const { path, data } = req.body ?? {};

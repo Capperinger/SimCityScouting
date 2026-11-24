@@ -12,13 +12,6 @@ type ScoutingData = Record<string, unknown> & {
     matchNumber?: number | string;
 };
 
-export interface ScoutingRecordReference {
-    path: string;
-    type: "match" | "pit";
-    teamNumber: string;
-    matchNumber?: string;
-}
-
 type TeamListResponse = {   
     team?: Array<number | string>;
 };
@@ -63,8 +56,11 @@ export interface StoredScoutingSyncResult {
 }
 
 let storedScoutingSyncPromise: Promise<StoredScoutingSyncResult> | null = null;
+let storedScoutingSyncIncludesMatches = false;
 
-async function syncStoredScoutingDataOnce(): Promise<StoredScoutingSyncResult> {
+async function syncStoredScoutingDataOnce(
+    includeMatches: boolean,
+): Promise<StoredScoutingSyncResult> {
     const result: StoredScoutingSyncResult = {
         submitted: 0,
         failed: 0,
@@ -73,7 +69,9 @@ async function syncStoredScoutingDataOnce(): Promise<StoredScoutingSyncResult> {
         remaining: 0,
     };
     const storedKeys = Object.keys(localStorage).filter(
-        (key) => key.startsWith("scoutData-") || key.startsWith("pitData-"),
+        (key) =>
+            key.startsWith("pitData-") ||
+            (includeMatches && key.startsWith("scoutData-")),
     );
 
     for (const key of storedKeys) {
@@ -141,14 +139,34 @@ async function syncStoredScoutingDataOnce(): Promise<StoredScoutingSyncResult> {
     return result;
 }
 
-export function syncStoredScoutingData(): Promise<StoredScoutingSyncResult> {
-    if (!storedScoutingSyncPromise) {
-        storedScoutingSyncPromise = syncStoredScoutingDataOnce().finally(() => {
-            storedScoutingSyncPromise = null;
-        });
+export function syncStoredScoutingData(
+    options: { includeMatches?: boolean } = {},
+): Promise<StoredScoutingSyncResult> {
+    const includeMatches = options.includeMatches ?? true;
+    if (storedScoutingSyncPromise) {
+        if (storedScoutingSyncIncludesMatches || !includeMatches) {
+            return storedScoutingSyncPromise;
+        }
+
+        return storedScoutingSyncPromise
+            .catch((error: unknown) => {
+                console.error(
+                    "Background scouting sync failed before the requested full sync:",
+                    error,
+                );
+            })
+            .then(() => syncStoredScoutingData(options));
     }
 
-    return storedScoutingSyncPromise;
+    storedScoutingSyncIncludesMatches = includeMatches;
+    const syncPromise = syncStoredScoutingDataOnce(includeMatches).finally(() => {
+        if (storedScoutingSyncPromise === syncPromise) {
+            storedScoutingSyncPromise = null;
+            storedScoutingSyncIncludesMatches = false;
+        }
+    });
+    storedScoutingSyncPromise = syncPromise;
+    return syncPromise;
 }
 
 export async function rt(path: string): Promise<unknown> {
@@ -270,91 +288,6 @@ export async function readDoc(path: string): Promise<TeamListResponse> {
         console.error("Error reading document:", error);
         throw error;
     }
-}
-
-function isScoutingRecordReference(
-    value: unknown,
-): value is ScoutingRecordReference {
-    if (typeof value !== "object" || value === null || Array.isArray(value)) {
-        return false;
-    }
-
-    const record = value as Record<string, unknown>;
-    if (
-        typeof record.path !== "string" ||
-        typeof record.teamNumber !== "string"
-    ) {
-        return false;
-    }
-
-    if (record.type === "match") {
-        return (
-            typeof record.matchNumber === "string" &&
-            record.path ===
-                matchScoutingPath(record.teamNumber, record.matchNumber)
-        );
-    }
-
-    return (
-        record.type === "pit" &&
-        record.path === pitScoutingPath(record.teamNumber)
-    );
-}
-
-export async function listScoutingRecords(): Promise<
-    ScoutingRecordReference[]
-> {
-    const response = await fetch(`${LINK}/list`);
-    if (!response.ok) {
-        throw new Error(`Unable to load submitted records (${response.status}).`);
-    }
-
-    let payload: unknown;
-    try {
-        payload = await response.json();
-    } catch {
-        throw new Error("The server returned an invalid records response.");
-    }
-    if (
-        typeof payload !== "object" ||
-        payload === null ||
-        !("records" in payload) ||
-        !Array.isArray(payload.records) ||
-        !payload.records.every(isScoutingRecordReference)
-    ) {
-        throw new Error("The server returned an invalid records response.");
-    }
-
-    return payload.records;
-}
-
-export async function readScoutingRecord(
-    path: string,
-): Promise<Record<string, unknown>> {
-    const response = await fetch(`${LINK}/read`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path }),
-    });
-    if (!response.ok) {
-        throw new Error(`Unable to load this submitted record (${response.status}).`);
-    }
-
-    let data: unknown;
-    try {
-        data = await response.json();
-    } catch {
-        throw new Error("The server returned an invalid scouting record.");
-    }
-    if (
-        typeof data !== "object" ||
-        data === null ||
-        Array.isArray(data)
-    ) {
-        throw new Error("The server returned an invalid scouting record.");
-    }
-
-    return data as Record<string, unknown>;
 }
 
 async function readAuthResponse(response: Response) {
