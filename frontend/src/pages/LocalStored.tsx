@@ -1,10 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+    clearSubmittedScoutingHistory,
+    getSubmittedScoutingHistory,
     matchScoutingPath,
     pitScoutingPath,
+    syncStoredScoutingData,
     writeToDb,
 } from "../scripts/firebase";
+import type { SubmittedScoutingRecord } from "../scripts/firebase";
 import ReactJsonView from "@microlink/react-json-view";
 import seedDataBase from "../scripts/seed";
 import IntegerInput from "../components/IntegerInput";
@@ -14,6 +18,7 @@ interface ActionComponentProps {
     onSubmit: () => void;
     onDelete: () => void;
     clear: () => void;
+    disabled: boolean;
 }
 
 interface StoredScoutingData extends Record<string, unknown> {
@@ -63,6 +68,7 @@ const ActionComponent: React.FC<ActionComponentProps> = ({
     onSubmit,
     onDelete,
     clear,
+    disabled,
 }) => {
     const navigate = useNavigate();
     const goBack = () => {
@@ -75,6 +81,7 @@ const ActionComponent: React.FC<ActionComponentProps> = ({
                 <button
                     className="text-center bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-10 rounded-2xl"
                     onClick={onSubmit}
+                    disabled={disabled}
                 >
                     Submit
                 </button>
@@ -82,12 +89,14 @@ const ActionComponent: React.FC<ActionComponentProps> = ({
                 <button
                     className="text-center bg-red-600 hover:bg-red-700 text-white font-bold w-2/5 ml-15 mr-15 py-2 px-10 rounded-2xl "
                     onClick={onDelete}
+                    disabled={disabled}
                 >
                     Delete
                 </button>
                 <button
                     className="text-center bg-blue-600 text-white font-bold py-2 px-6 rounded-2xl"
                     onClick={goBack}
+                    disabled={disabled}
                 >
                     Back
                 </button>
@@ -98,6 +107,7 @@ const ActionComponent: React.FC<ActionComponentProps> = ({
                 <button
                     className="bg-red-800 text-white font-bold w-5/5 mt-5 py-2 px-6 rounded-2xl shadow w-37/200"
                     onClick={clear}
+                    disabled={disabled}
                 >
                     Clear
                 </button>
@@ -118,12 +128,19 @@ const LocalStorageView: React.FC = () => {
     const [selectedKey, setSelectedKey] = React.useState<string>("");
     const [value, setValue] = React.useState<string>("");
     const [submissionError, setSubmissionError] = React.useState("");
+    const [submissionMessage, setSubmissionMessage] =
+        React.useState("");
+    const [submissionHistory, setSubmissionHistory] = React.useState<
+        SubmittedScoutingRecord[]
+    >([]);
+    const [submittingAll, setSubmittingAll] = React.useState(false);
     const [seeding, setSeeding] = React.useState(false);
     const [seedMessage, setSeedMessage] = React.useState("");
 
     React.useEffect(() => {
         if (typeof window !== "undefined") {
             setKeys(getScoutingStorageKeys());
+            setSubmissionHistory(getSubmittedScoutingHistory());
         }
     }, []);
 
@@ -131,6 +148,63 @@ const LocalStorageView: React.FC = () => {
         if (!selectedKey) return;
         const v = localStorage.getItem(selectedKey);
         setValue(v ?? "");
+    };
+
+    const submitAll = async () => {
+        if (submittingAll) {
+            return;
+        }
+
+        if (keys.length === 0) {
+            setSubmissionMessage(
+                "There is no locally saved scouting data to submit.",
+            );
+            return;
+        }
+
+        if (
+            !window.confirm(
+                `Submit all ${keys.length} locally saved scouting item(s)? Each local copy is removed only after Firebase confirms it was saved.`,
+            )
+        ) {
+            return;
+        }
+
+        setSubmittingAll(true);
+        setSubmissionError("");
+        setSubmissionMessage("");
+        try {
+            const result = await syncStoredScoutingData();
+            const remainingKeys = getScoutingStorageKeys();
+            setKeys(remainingKeys);
+            setSubmissionHistory(getSubmittedScoutingHistory());
+            if (selectedKey && !remainingKeys.includes(selectedKey)) {
+                setSelectedKey("");
+                setValue("");
+            }
+
+            const messages = [
+                `Submitted ${result.submitted} item(s).`,
+                result.failed > 0
+                    ? `${result.failed} item(s) failed and remain on this device.`
+                    : "",
+                result.skipped > 0
+                    ? `${result.skipped} invalid or unavailable item(s) were skipped.`
+                    : "",
+                result.cleanupFailed > 0
+                    ? `${result.cleanupFailed} saved item(s) could not be removed locally.`
+                    : "",
+                `${result.remaining} local item(s) remain.`,
+            ].filter(Boolean);
+            setSubmissionMessage(messages.join(" "));
+        } catch (error) {
+            console.error("Unable to submit all stored scouting data:", error);
+            setSubmissionError(
+                "Bulk submission stopped before it could finish. Refresh the stored data list before trying again.",
+            );
+        } finally {
+            setSubmittingAll(false);
+        }
     };
 
     const deleteItem = () => {
@@ -144,7 +218,7 @@ const LocalStorageView: React.FC = () => {
         setSubmissionError("");
         if (
             window.confirm(
-                "Clear all locally saved match and pit scouting data? This removes unsent scouting backups from this device. Your saved sign-in and preferences will remain.",
+                "Clear all locally saved match and pit scouting data? This removes unsent scouting backups from this device. Your submission history, saved sign-in, and preferences will remain.",
             )
         ) {
             try {
@@ -163,8 +237,30 @@ const LocalStorageView: React.FC = () => {
         }
     };
 
+    const clearSubmissionHistory = () => {
+        if (
+            submissionHistory.length === 0 ||
+            !window.confirm(
+                "Clear recent submission history from this device? This does not delete records from Firebase or remove unsent local backups.",
+            )
+        ) {
+            return;
+        }
+
+        try {
+            clearSubmittedScoutingHistory();
+            setSubmissionHistory([]);
+        } catch (error) {
+            console.error("Unable to clear submission history:", error);
+            setSubmissionError(
+                "Could not clear the local submission history.",
+            );
+        }
+    };
+
     const submitItem = async () => {
         setSubmissionError("");
+        setSubmissionMessage("");
         if (!selectedKey) {
             setSubmissionError("Select a local data item before submitting.");
             return;
@@ -204,6 +300,7 @@ const LocalStorageView: React.FC = () => {
             return;
         }
 
+        setSubmissionHistory(getSubmittedScoutingHistory());
         try {
             localStorage.removeItem(selectedKey);
         } catch (error) {
@@ -213,7 +310,15 @@ const LocalStorageView: React.FC = () => {
             );
             return;
         }
-        window.location.href = "/";
+        const remainingKeys = getScoutingStorageKeys();
+        setKeys(remainingKeys);
+        setSelectedKey("");
+        setValue("");
+        setSubmissionMessage(
+            isPitScouting
+                ? `Submitted pit scouting for team ${parsed.teamNumber}.`
+                : `Submitted match ${parsed.matchNumber} for team ${parsed.teamNumber}.`,
+        );
     };
 
     const seed = async () => {
@@ -233,6 +338,9 @@ const LocalStorageView: React.FC = () => {
                     ? `Seed data saved for team ${seedJson.teamNumber}, match ${seedJson.matchNumber}.`
                     : "Firebase did not save the seed data. Check your connection and try again.",
             );
+            if (saved) {
+                setSubmissionHistory(getSubmittedScoutingHistory());
+            }
         } catch (error) {
             console.error("Unable to seed Firebase:", error);
             setSeedMessage(
@@ -256,19 +364,20 @@ const LocalStorageView: React.FC = () => {
 
             <h1 className="font-bold text-white text-4xl">Stored Data</h1>
             <p className="font-bold text-white">
-                scoutData-(teamNumber)-(matchNumber)
+                Upload data stored on this device to the database.
             </p>
             <div className="flex flex-col items-center space-y-4 pb-8">
                 <h2 className="text-white text-xl">
-                    Select a key to view/edit
+                    Select a match to view/edit
                 </h2>
 
                 <select
                     className="bg-gray-800 text-white px-4 py-2 rounded-xl"
                     value={selectedKey}
                     onChange={(e) => setSelectedKey(e.target.value)}
+                    disabled={submittingAll}
                 >
-                    <option value="">-- Select Key --</option>
+                    <option value="">Select a match</option>
                     {keys.map((k) => (
                         <option key={k} value={k}>
                             {k}
@@ -279,9 +388,74 @@ const LocalStorageView: React.FC = () => {
                 <button
                     onClick={loadItem}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl"
+                    disabled={submittingAll}
                 >
-                    Load
+                    Load match data
                 </button>
+
+                <button
+                    onClick={submitAll}
+                    disabled={submittingAll || keys.length === 0}
+                    className="bg-green-700 hover:bg-green-800 disabled:opacity-50 text-white px-4 py-2 rounded-xl"
+                >
+                    {submittingAll
+                        ? `Submitting ${keys.length} saved item(s)...`
+                        : `Submit all saved data (${keys.length})`}
+                </button>
+
+                {submissionMessage && (
+                    <p className="text-white text-center" role="status">
+                        {submissionMessage}
+                    </p>
+                )}
+
+                <section className="w-full max-w-xl rounded-xl bg-gray-900 p-4 text-white">
+                    <div className="flex items-center justify-between gap-4">
+                        <h2 className="text-xl font-semibold">
+                            Recent submissions
+                        </h2>
+                        <button
+                            onClick={clearSubmissionHistory}
+                            disabled={submissionHistory.length === 0}
+                            className="rounded bg-gray-700 px-3 py-1 text-sm hover:bg-gray-600 disabled:opacity-50"
+                        >
+                            Clear history
+                        </button>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-300">
+                        The last 50 successful submissions are saved on this
+                        device.
+                    </p>
+                    {submissionHistory.length === 0 ? (
+                        <p className="mt-3 text-gray-300">
+                            No successful submissions recorded yet.
+                        </p>
+                    ) : (
+                        <ul className="mt-3 space-y-2">
+                            {submissionHistory.map((record) => (
+                                <li
+                                    key={record.id}
+                                    className="flex flex-wrap justify-between gap-x-4 rounded bg-gray-800 p-3"
+                                >
+                                    <span>
+                                        {record.type === "match"
+                                            ? `Match ${record.matchNumber}`
+                                            : "Pit scouting"}{" "}
+                                        · Team {record.teamNumber}
+                                    </span>
+                                    <time
+                                        className="text-sm text-gray-300"
+                                        dateTime={record.submittedAt}
+                                    >
+                                        {new Date(
+                                            record.submittedAt,
+                                        ).toLocaleString()}
+                                    </time>
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+                </section>
 
                 <ReactJsonView
                     src={parseJsonOrEmpty(value)}
@@ -297,6 +471,7 @@ const LocalStorageView: React.FC = () => {
                 onSubmit={submitItem}
                 onDelete={deleteItem}
                 clear={clear}
+                disabled={submittingAll}
             />
             {submissionError && (
                 <p className="text-red-400 text-center" role="alert">

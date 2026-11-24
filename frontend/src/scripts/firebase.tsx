@@ -12,9 +12,20 @@ type ScoutingData = Record<string, unknown> & {
     matchNumber?: number | string;
 };
 
+export interface SubmittedScoutingRecord {
+    id: string;
+    type: "match" | "pit";
+    teamNumber: string;
+    matchNumber?: string;
+    submittedAt: string;
+}
+
 type TeamListResponse = {   
     team?: Array<number | string>;
 };
+
+const SUBMISSION_HISTORY_KEY = "scoutingSubmissionHistory";
+const SUBMISSION_HISTORY_LIMIT = 50;
 
 export const matchScoutingPath = (
     teamNumber: number | string,
@@ -47,7 +58,123 @@ function isScoutingData(value: unknown): value is ScoutingData {
     );
 }
 
-export async function syncStoredScoutingData() {
+function isSubmittedScoutingRecord(
+    value: unknown,
+): value is SubmittedScoutingRecord {
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+        return false;
+    }
+
+    const record = value as Record<string, unknown>;
+    return (
+        typeof record.id === "string" &&
+        (record.type === "match" || record.type === "pit") &&
+        typeof record.teamNumber === "string" &&
+        record.teamNumber.length > 0 &&
+        (record.type !== "match" ||
+            (typeof record.matchNumber === "string" &&
+                record.matchNumber.length > 0)) &&
+        typeof record.submittedAt === "string"
+    );
+}
+
+export function getSubmittedScoutingHistory(): SubmittedScoutingRecord[] {
+    try {
+        const stored = localStorage.getItem(SUBMISSION_HISTORY_KEY);
+        if (!stored) {
+            return [];
+        }
+
+        const parsed: unknown = JSON.parse(stored);
+        if (!Array.isArray(parsed)) {
+            throw new Error("Submission history must be a list.");
+        }
+
+        return parsed
+            .filter(isSubmittedScoutingRecord)
+            .slice(0, SUBMISSION_HISTORY_LIMIT);
+    } catch (error) {
+        console.error("Unable to load scouting submission history:", error);
+        return [];
+    }
+}
+
+export function clearSubmittedScoutingHistory() {
+    localStorage.removeItem(SUBMISSION_HISTORY_KEY);
+}
+
+function recordSubmittedScoutingData(path: string, value: unknown) {
+    if (!isScoutingData(value) || !isPositiveInteger(value.teamNumber)) {
+        return;
+    }
+
+    const segments = path.split("/");
+    const teamNumber = String(value.teamNumber);
+    let record: SubmittedScoutingRecord | null = null;
+
+    if (
+        segments.length === 4 &&
+        segments[0] === "match scouting" &&
+        segments[2] === "matches" &&
+        segments[1] === teamNumber &&
+        isPositiveInteger(value.matchNumber) &&
+        segments[3] === String(value.matchNumber)
+    ) {
+        record = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            type: "match",
+            teamNumber,
+            matchNumber: String(value.matchNumber),
+            submittedAt: new Date().toISOString(),
+        };
+    } else if (
+        segments.length === 2 &&
+        segments[0] === "pit scouting" &&
+        segments[1] === teamNumber
+    ) {
+        record = {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            type: "pit",
+            teamNumber,
+            submittedAt: new Date().toISOString(),
+        };
+    }
+
+    if (!record) {
+        return;
+    }
+
+    try {
+        const history = getSubmittedScoutingHistory();
+        localStorage.setItem(
+            SUBMISSION_HISTORY_KEY,
+            JSON.stringify(
+                [record, ...history].slice(0, SUBMISSION_HISTORY_LIMIT),
+            ),
+        );
+    } catch (error) {
+        console.error("Unable to save scouting submission history:", error);
+    }
+}
+
+export interface StoredScoutingSyncResult {
+    submitted: number;
+    failed: number;
+    skipped: number;
+    cleanupFailed: number;
+    remaining: number;
+}
+
+let storedScoutingSyncPromise: Promise<StoredScoutingSyncResult> | null = null;
+
+async function syncStoredScoutingDataOnce(): Promise<StoredScoutingSyncResult> {
+    const result: StoredScoutingSyncResult = {
+        submitted: 0,
+        failed: 0,
+        skipped: 0,
+        cleanupFailed: 0,
+        remaining: 0,
+    };
     const storedKeys = Object.keys(localStorage).filter(
         (key) => key.startsWith("scoutData-") || key.startsWith("pitData-"),
     );
@@ -55,6 +182,7 @@ export async function syncStoredScoutingData() {
     for (const key of storedKeys) {
         const storedValue = localStorage.getItem(key);
         if (!storedValue) {
+            result.skipped += 1;
             continue;
         }
 
@@ -63,17 +191,20 @@ export async function syncStoredScoutingData() {
             data = JSON.parse(storedValue);
         } catch (error) {
             console.error(`Unable to parse saved scouting data ${key}:`, error);
+            result.skipped += 1;
             continue;
         }
 
         if (!isScoutingData(data)) {
             console.error(`Saved scouting data ${key} is invalid and was kept.`);
+            result.skipped += 1;
             continue;
         }
 
         const teamNumber = data.teamNumber;
         if (!isPositiveInteger(teamNumber)) {
             console.error(`Saved scouting data ${key} is invalid and was kept.`);
+            result.skipped += 1;
             continue;
         }
 
@@ -87,19 +218,40 @@ export async function syncStoredScoutingData() {
                 console.error(
                     `Saved scouting data ${key} is invalid and was kept.`,
                 );
+                result.skipped += 1;
                 continue;
             }
             path = matchScoutingPath(teamNumber, matchNumber);
         }
 
-        if (await writeData(path, data, false)) {
-            try {
-                localStorage.removeItem(key);
-            } catch (error) {
-                console.error(`Unable to remove saved scouting data ${key}:`, error);
-            }
+        if (!(await writeData(path, data, false))) {
+            result.failed += 1;
+            continue;
+        }
+
+        result.submitted += 1;
+        try {
+            localStorage.removeItem(key);
+        } catch (error) {
+            console.error(`Unable to remove saved scouting data ${key}:`, error);
+            result.cleanupFailed += 1;
         }
     }
+
+    result.remaining = Object.keys(localStorage).filter(
+        (key) => key.startsWith("scoutData-") || key.startsWith("pitData-"),
+    ).length;
+    return result;
+}
+
+export function syncStoredScoutingData(): Promise<StoredScoutingSyncResult> {
+    if (!storedScoutingSyncPromise) {
+        storedScoutingSyncPromise = syncStoredScoutingDataOnce().finally(() => {
+            storedScoutingSyncPromise = null;
+        });
+    }
+
+    return storedScoutingSyncPromise;
 }
 
 export async function rt(path: string): Promise<unknown> {
@@ -181,6 +333,7 @@ async function writeData(
                 "The server did not confirm that Firebase saved this data.",
             );
         }
+        recordSubmittedScoutingData(path, data);
         return true;
     } catch (err) {
         console.error("Error writing document:", err);
