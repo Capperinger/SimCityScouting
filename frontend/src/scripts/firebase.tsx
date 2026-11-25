@@ -321,7 +321,13 @@ export async function readDoc(path: string): Promise<TeamListResponse> {
 }
 
 async function readAuthResponse(response: Response) {
-    const payload: unknown = await response.json().catch(() => null);
+    const responseText = await response.text();
+    let payload: unknown;
+    try {
+        payload = JSON.parse(responseText);
+    } catch {
+        payload = responseText ? { message: responseText } : null;
+    }
     return typeof payload === "object" && payload !== null
         ? (payload as {
               message?: unknown;

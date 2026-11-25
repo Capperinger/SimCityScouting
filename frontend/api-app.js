@@ -234,13 +234,20 @@ router.post("/read", read);
 
 router.post("/login", async (req, res) => {
     try {
-        const { email, password } = req.body;
+        const { email, password } = req.body ?? {};
 
-        if (!email || !password) {
-            return res.status(400).send("Email and password are required");
+        if (
+            typeof email !== "string" ||
+            typeof password !== "string" ||
+            !email.trim() ||
+            !password
+        ) {
+            return res
+                .status(400)
+                .json({ message: "Email and password are required" });
         }
 
-        const userRecord = await admin.auth().getUserByEmail(email);
+        const userRecord = await admin.auth().getUserByEmail(email.trim());
 
         const userPasswordRef = db.doc(`auth/${userRecord.uid}`);
         const userPasswordSnapshot = await userPasswordRef.get();
@@ -277,12 +284,29 @@ router.post("/login", async (req, res) => {
         }
     } catch (error) {
         console.error("Login Error:", error);
-        if (error.code === "auth/user-not-found") {
+        const errorCode =
+            typeof error === "object" && error !== null && "code" in error
+                ? error.code
+                : undefined;
+        if (errorCode === "auth/user-not-found") {
             return res
                 .status(401)
                 .json({ message: "Invalid email or password" });
         }
-        res.status(500).send(`Error: ${error.message}`);
+        const errorMessage =
+            error instanceof Error ? error.message : String(error);
+        const isAuthNotConfigured =
+            errorCode === "auth/configuration-not-found" ||
+            errorMessage.includes(
+                "There is no configuration corresponding to the provided identifier",
+            );
+        if (isAuthNotConfigured) {
+            return res.status(503).json({
+                message:
+                    "Firebase Authentication is not configured for this project. In Firebase Console, enable Authentication and the Email/Password sign-in provider.",
+            });
+        }
+        res.status(500).json({ message: `Error: ${errorMessage}` });
     }
 });
 

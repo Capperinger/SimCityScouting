@@ -74,6 +74,8 @@ The Vercel project uses `frontend` as its Root Directory and serves both the app
 
 If `FIREBASE_PROJECT_ID` is omitted, the backend uses the service account's `project_id`. If `FIREBASE_DATABASE_URL` is omitted, it uses that project's default Realtime Database URL. Set both explicitly when using a non-default database. The service account project must match `FIREBASE_PROJECT_ID`.
 
+Sign-in and account creation also require Firebase Authentication to be initialized for the same project. In Firebase Console, open **Authentication**, get started if prompted, then enable **Email/Password** under **Sign-in method**.
+
 ## Components (frontend/src/components)
 
 ### AutoResizeTextArea 
