@@ -179,9 +179,6 @@ const LocalStorageView: React.FC = () => {
 
             const messages = [
                 `Submitted ${result.submitted} item(s).`,
-                result.failed > 0
-                    ? `${result.failed} item(s) failed and remain on this device.`
-                    : "",
                 result.skipped > 0
                     ? `${result.skipped} invalid or unavailable item(s) were skipped.`
                     : "",
@@ -191,6 +188,18 @@ const LocalStorageView: React.FC = () => {
                 `${result.remaining} local item(s) remain.`,
             ].filter(Boolean);
             setSubmissionMessage(messages.join(" "));
+            if (result.failed > 0) {
+                const failureDetails = result.failures
+                    .slice(0, 3)
+                    .map(
+                        ({ key, message }) =>
+                            `${key}: ${message}`,
+                    )
+                    .join(" | ");
+                setSubmissionError(
+                    `${result.failed} item(s) failed and remain on this device.${failureDetails ? ` ${failureDetails}` : ""}`,
+                );
+            }
         } catch (error) {
             console.error("Unable to submit all stored scouting data:", error);
             setSubmissionError(
