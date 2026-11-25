@@ -50,6 +50,7 @@ function isScoutingData(value: unknown): value is ScoutingData {
 export interface StoredScoutingSyncResult {
     submitted: number;
     failed: number;
+    failures: Array<{ key: string; message: string }>;
     skipped: number;
     cleanupFailed: number;
     remaining: number;
@@ -64,6 +65,7 @@ async function syncStoredScoutingDataOnce(
     const result: StoredScoutingSyncResult = {
         submitted: 0,
         failed: 0,
+        failures: [],
         skipped: 0,
         cleanupFailed: 0,
         remaining: 0,
@@ -119,8 +121,13 @@ async function syncStoredScoutingDataOnce(
             path = matchScoutingPath(teamNumber, matchNumber);
         }
 
-        if (!(await writeData(path, data, false))) {
+        let failureMessage = "The server did not confirm this write.";
+        const saved = await writeData(path, data, false, (message) => {
+            failureMessage = message;
+        });
+        if (!saved) {
             result.failed += 1;
+            result.failures.push({ key, message: failureMessage });
             continue;
         }
 
@@ -202,6 +209,7 @@ async function writeData(
     path: string,
     data: unknown,
     notifyUser = true,
+    onFailure?: (message: string) => void,
 ) {
     try {
         const body = {
@@ -217,6 +225,25 @@ async function writeData(
         });
         const responseBody = await response.text();
         if (!response.ok) {
+            let errorMessage = responseBody;
+            try {
+                const payload: unknown = JSON.parse(responseBody);
+                if (
+                    typeof payload === "object" &&
+                    payload !== null &&
+                    "message" in payload &&
+                    typeof payload.message === "string"
+                ) {
+                    errorMessage = payload.message;
+                }
+            } catch {
+                // Keep the response body as the failure detail when it is not JSON.
+            }
+            if (!errorMessage) {
+                errorMessage =
+                    response.statusText || `HTTP ${response.status}`;
+            }
+            onFailure?.(errorMessage);
             console.error(
                 `Firebase write failed (${response.status}): ${responseBody}`,
             );
@@ -251,6 +278,9 @@ async function writeData(
         return true;
     } catch (err) {
         console.error("Error writing document:", err);
+        onFailure?.(
+            err instanceof Error ? err.message : "Unknown network error.",
+        );
         if (notifyUser) {
             alert(
                 `Firebase did not confirm saving your data${err instanceof Error ? `: ${err.message}` : ". Please check your connection and try again."}`,
